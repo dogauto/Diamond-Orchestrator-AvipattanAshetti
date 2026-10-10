@@ -268,7 +268,7 @@ function renderTasks(tasks) {
 
 function renderStats(d) {
   const ok = d.providers.filter(p => p.status === 'available').length;
-  const wf = d.workflows.filter(w => w.status.value === 'VERIFIED').length;
+  const wf = d.workflows.filter(w => w.status === 'VERIFIED').length;
   const el = document.getElementById('statsBar');
   el.innerHTML = `
     <div class="stat-card"><div class="stat-num">${ok}/${d.providers.length}</div><div class="stat-label">Providers Live</div></div>
