@@ -1,0 +1,81 @@
+client:
+  name: basic
+  file-system: device-agnostic
+tools: {}
+targets:
+  "DiamondMac-arm64-apple-macosx28.0-debug.exe": ["<DiamondMac-arm64-apple-macosx28.0-debug.exe>"]
+  "DiamondMac-arm64-apple-macosx28.0-debug.module": ["<DiamondMac-arm64-apple-macosx28.0-debug.module>"]
+  "PackageStructure": ["<PackageStructure>"]
+  "main": ["<DiamondMac-arm64-apple-macosx28.0-debug.exe>","<DiamondMac-arm64-apple-macosx28.0-debug.module>"]
+  "test": ["<DiamondMac-arm64-apple-macosx28.0-debug.exe>","<DiamondMac-arm64-apple-macosx28.0-debug.module>"]
+default: "main"
+nodes:
+  "/Users/avipattan/flawless-diamond-piece/examples/DiamondMac/Sources/DiamondMac/":
+    is-directory-structure: true
+    content-exclusion-patterns: [".git",".build"]
+  "/Users/avipattan/flawless-diamond-piece/examples/DiamondMac/.build/arm64-apple-macosx/debug/DiamondMac":
+    is-mutated: true
+commands:
+  "/Users/avipattan/flawless-diamond-piece/examples/DiamondMac/.build/arm64-apple-macosx/debug/DiamondMac-entitlement.plist":
+    tool: write-auxiliary-file
+    inputs: ["<entitlement-plist>","<com.apple.security.get-task-allow>"]
+    outputs: ["/Users/avipattan/flawless-diamond-piece/examples/DiamondMac/.build/arm64-apple-macosx/debug/DiamondMac-entitlement.plist"]
+    description: "Write auxiliary file /Users/avipattan/flawless-diamond-piece/examples/DiamondMac/.build/arm64-apple-macosx/debug/DiamondMac-entitlement.plist"
+
+  "/Users/avipattan/flawless-diamond-piece/examples/DiamondMac/.build/arm64-apple-macosx/debug/DiamondMac.build/sources":
+    tool: write-auxiliary-file
+    inputs: ["<sources-file-list>","/Users/avipattan/flawless-diamond-piece/examples/DiamondMac/Sources/DiamondMac/main.swift"]
+    outputs: ["/Users/avipattan/flawless-diamond-piece/examples/DiamondMac/.build/arm64-apple-macosx/debug/DiamondMac.build/sources"]
+    description: "Write auxiliary file /Users/avipattan/flawless-diamond-piece/examples/DiamondMac/.build/arm64-apple-macosx/debug/DiamondMac.build/sources"
+
+  "/Users/avipattan/flawless-diamond-piece/examples/DiamondMac/.build/arm64-apple-macosx/debug/DiamondMac.product/Objects.LinkFileList":
+    tool: write-auxiliary-file
+    inputs: ["<link-file-list>","/Users/avipattan/flawless-diamond-piece/examples/DiamondMac/.build/arm64-apple-macosx/debug/DiamondMac.build/main.swift.o"]
+    outputs: ["/Users/avipattan/flawless-diamond-piece/examples/DiamondMac/.build/arm64-apple-macosx/debug/DiamondMac.product/Objects.LinkFileList"]
+    description: "Write auxiliary file /Users/avipattan/flawless-diamond-piece/examples/DiamondMac/.build/arm64-apple-macosx/debug/DiamondMac.product/Objects.LinkFileList"
+
+  "/Users/avipattan/flawless-diamond-piece/examples/DiamondMac/.build/arm64-apple-macosx/debug/swift-version--1AB21518FC5DEDBE.txt":
+    tool: write-auxiliary-file
+    inputs: ["<swift-get-version>","/Library/Developer/CommandLineTools/usr/bin/swiftc"]
+    outputs: ["/Users/avipattan/flawless-diamond-piece/examples/DiamondMac/.build/arm64-apple-macosx/debug/swift-version--1AB21518FC5DEDBE.txt"]
+    always-out-of-date: "true"
+    description: "Write auxiliary file /Users/avipattan/flawless-diamond-piece/examples/DiamondMac/.build/arm64-apple-macosx/debug/swift-version--1AB21518FC5DEDBE.txt"
+
+  "<DiamondMac-arm64-apple-macosx28.0-debug.exe>":
+    tool: phony
+    inputs: ["<DiamondMac-arm64-apple-macosx28.0-debug.exe-CodeSigning>"]
+    outputs: ["<DiamondMac-arm64-apple-macosx28.0-debug.exe>"]
+
+  "<DiamondMac-arm64-apple-macosx28.0-debug.module>":
+    tool: phony
+    inputs: ["/Users/avipattan/flawless-diamond-piece/examples/DiamondMac/.build/arm64-apple-macosx/debug/DiamondMac.build/main.swift.o","/Users/avipattan/flawless-diamond-piece/examples/DiamondMac/.build/arm64-apple-macosx/debug/Modules/DiamondMac.swiftmodule"]
+    outputs: ["<DiamondMac-arm64-apple-macosx28.0-debug.module>"]
+
+  "C.DiamondMac-arm64-apple-macosx28.0-debug.exe":
+    tool: shell
+    inputs: ["/Users/avipattan/flawless-diamond-piece/examples/DiamondMac/.build/arm64-apple-macosx/debug/DiamondMac.build/main.swift.o","/Users/avipattan/flawless-diamond-piece/examples/DiamondMac/.build/arm64-apple-macosx/debug/DiamondMac.product/Objects.LinkFileList"]
+    outputs: ["/Users/avipattan/flawless-diamond-piece/examples/DiamondMac/.build/arm64-apple-macosx/debug/DiamondMac"]
+    description: "Linking ./.build/arm64-apple-macosx/debug/DiamondMac"
+    args: ["/Library/Developer/CommandLineTools/usr/bin/swiftc","-L","/Users/avipattan/flawless-diamond-piece/examples/DiamondMac/.build/arm64-apple-macosx/debug","-o","/Users/avipattan/flawless-diamond-piece/examples/DiamondMac/.build/arm64-apple-macosx/debug/DiamondMac","-module-name","DiamondMac","-Xlinker","-no_warn_duplicate_libraries","-emit-executable","-Xlinker","-alias","-Xlinker","_DiamondMac_main","-Xlinker","_main","-Xlinker","-rpath","-Xlinker","@loader_path","@/Users/avipattan/flawless-diamond-piece/examples/DiamondMac/.build/arm64-apple-macosx/debug/DiamondMac.product/Objects.LinkFileList","-Xlinker","-rpath","-Xlinker","/Library/Developer/CommandLineTools/usr/lib/swift-6.2/macosx","-target","arm64-apple-macosx14.0","-Xlinker","-add_ast_path","-Xlinker","/Users/avipattan/flawless-diamond-piece/examples/DiamondMac/.build/arm64-apple-macosx/debug/Modules/DiamondMac.swiftmodule","-I","/Library/Developer/CommandLineTools/Library/Developer/Frameworks","-L","/Library/Developer/CommandLineTools/Library/Developer/Frameworks","-plugin-path","/Library/Developer/CommandLineTools/usr/lib/swift/host/plugins/testing","-sdk","/Library/Developer/CommandLineTools/SDKs/MacOSX.sdk","-g"]
+
+  "C.DiamondMac-arm64-apple-macosx28.0-debug.exe-entitlements":
+    tool: shell
+    inputs: ["/Users/avipattan/flawless-diamond-piece/examples/DiamondMac/.build/arm64-apple-macosx/debug/DiamondMac","/Users/avipattan/flawless-diamond-piece/examples/DiamondMac/.build/arm64-apple-macosx/debug/DiamondMac-entitlement.plist"]
+    outputs: ["<DiamondMac-arm64-apple-macosx28.0-debug.exe-CodeSigning>"]
+    description: "Applying debug entitlements to ./.build/arm64-apple-macosx/debug/DiamondMac"
+    args: ["codesign","--force","--sign","-","--entitlements","/Users/avipattan/flawless-diamond-piece/examples/DiamondMac/.build/arm64-apple-macosx/debug/DiamondMac-entitlement.plist","/Users/avipattan/flawless-diamond-piece/examples/DiamondMac/.build/arm64-apple-macosx/debug/DiamondMac"]
+
+  "C.DiamondMac-arm64-apple-macosx28.0-debug.module":
+    tool: shell
+    inputs: ["/Users/avipattan/flawless-diamond-piece/examples/DiamondMac/Sources/DiamondMac/main.swift","/Users/avipattan/flawless-diamond-piece/examples/DiamondMac/.build/arm64-apple-macosx/debug/swift-version--1AB21518FC5DEDBE.txt","/Users/avipattan/flawless-diamond-piece/examples/DiamondMac/.build/arm64-apple-macosx/debug/DiamondMac.build/sources"]
+    outputs: ["/Users/avipattan/flawless-diamond-piece/examples/DiamondMac/.build/arm64-apple-macosx/debug/DiamondMac.build/main.swift.o","/Users/avipattan/flawless-diamond-piece/examples/DiamondMac/.build/arm64-apple-macosx/debug/Modules/DiamondMac.swiftmodule"]
+    description: "Compiling Swift Module 'DiamondMac' (1 sources)"
+    args: ["/Library/Developer/CommandLineTools/usr/bin/swiftc","-module-name","DiamondMac","-emit-dependencies","-emit-module","-emit-module-path","/Users/avipattan/flawless-diamond-piece/examples/DiamondMac/.build/arm64-apple-macosx/debug/Modules/DiamondMac.swiftmodule","-output-file-map","/Users/avipattan/flawless-diamond-piece/examples/DiamondMac/.build/arm64-apple-macosx/debug/DiamondMac.build/output-file-map.json","-incremental","-c","@/Users/avipattan/flawless-diamond-piece/examples/DiamondMac/.build/arm64-apple-macosx/debug/DiamondMac.build/sources","-I","/Users/avipattan/flawless-diamond-piece/examples/DiamondMac/.build/arm64-apple-macosx/debug/Modules","-target","arm64-apple-macosx14.0","-incremental","-enable-batch-mode","-serialize-diagnostics","-index-store-path","/Users/avipattan/flawless-diamond-piece/examples/DiamondMac/.build/arm64-apple-macosx/debug/index/store","-Onone","-enable-testing","-j8","-DSWIFT_PACKAGE","-DDEBUG","-DSWIFT_MODULE_RESOURCE_BUNDLE_UNAVAILABLE","-module-cache-path","/Users/avipattan/flawless-diamond-piece/examples/DiamondMac/.build/arm64-apple-macosx/debug/ModuleCache","-parseable-output","-Xfrontend","-entry-point-function-name","-Xfrontend","DiamondMac_main","-parse-as-library","-swift-version","6","-I","/Library/Developer/CommandLineTools/Library/Developer/Frameworks","-L","/Library/Developer/CommandLineTools/Library/Developer/Frameworks","-plugin-path","/Library/Developer/CommandLineTools/usr/lib/swift/host/plugins/testing","-sdk","/Library/Developer/CommandLineTools/SDKs/MacOSX.sdk","-g","-Xcc","-isysroot","-Xcc","/Library/Developer/CommandLineTools/SDKs/MacOSX.sdk","-Xcc","-fPIC","-Xcc","-g","-package-name","diamondmac"]
+
+  "PackageStructure":
+    tool: package-structure-tool
+    inputs: ["/Users/avipattan/flawless-diamond-piece/examples/DiamondMac/Sources/DiamondMac/","/Users/avipattan/flawless-diamond-piece/examples/DiamondMac/Package.swift","/Users/avipattan/flawless-diamond-piece/examples/DiamondMac/Package.resolved"]
+    outputs: ["<PackageStructure>"]
+    description: "Planning build"
+    allow-missing-inputs: true
+

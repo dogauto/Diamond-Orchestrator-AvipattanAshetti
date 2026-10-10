@@ -1,0 +1,12 @@
+{
+  "": {
+    "swift-dependencies": "/Users/avipattan/flawless-diamond-piece/examples/DiamondMac/.build/arm64-apple-macosx/debug/DiamondMac.build/master.swiftdeps"
+  },
+  "/Users/avipattan/flawless-diamond-piece/examples/DiamondMac/Sources/DiamondMac/main.swift": {
+    "dependencies": "/Users/avipattan/flawless-diamond-piece/examples/DiamondMac/.build/arm64-apple-macosx/debug/DiamondMac.build/main.d",
+    "object": "/Users/avipattan/flawless-diamond-piece/examples/DiamondMac/.build/arm64-apple-macosx/debug/DiamondMac.build/main.swift.o",
+    "swiftmodule": "/Users/avipattan/flawless-diamond-piece/examples/DiamondMac/.build/arm64-apple-macosx/debug/DiamondMac.build/main~partial.swiftmodule",
+    "swift-dependencies": "/Users/avipattan/flawless-diamond-piece/examples/DiamondMac/.build/arm64-apple-macosx/debug/DiamondMac.build/main.swiftdeps",
+    "diagnostics": "/Users/avipattan/flawless-diamond-piece/examples/DiamondMac/.build/arm64-apple-macosx/debug/DiamondMac.build/main.dia"
+  }
+}
