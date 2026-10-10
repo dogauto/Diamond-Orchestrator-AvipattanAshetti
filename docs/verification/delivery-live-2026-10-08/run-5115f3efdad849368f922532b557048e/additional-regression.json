@@ -1,0 +1,18 @@
+{
+  "schema_version": 1,
+  "scope": "additional_sample_requirement_regression_after_blocked_qa",
+  "status": "FAIL",
+  "source_candidate_sha256": "a09f3aa86932983c672ccd8704aa061a96fe7dd1c11f636e403ae64723ec29de",
+  "delivery_id": "cf763f40304c4c939e07806a725563b7",
+  "relative_path": "src/duration.py",
+  "artifact_sha256": "f21ee9f4ea8ebff471f573602598acb5b188eec4265224e50a7416ad1f82fd80",
+  "requirement_id": "duration-contract",
+  "command": "env PYTHONPATH=\"\" PYTHONHOME=\"\" PYTHONNOUSERSITE=1 PYTHONDONTWRITEBYTECODE=1 python3.11 -B -c 'from src.duration import parse_duration; assert parse_duration(\"0\" * 5000 + \"1m02s\") == 62; assert parse_duration(\"1m\" + \"0\" * 5000 + \"02s\") == 62; print(\"long leading-zero regression passed\")'",
+  "workdir": "/Users/avipattan/flawless-diamond-piece/docs/verification/delivery-live-2026-10-08/run-5115f3efdad849368f922532b557048e/workspaces/target",
+  "exit_code": 1,
+  "observed_error": "ValueError: Exceeds the limit (4300 digits) for integer string conversion: value has 5001 digits; use sys.set_int_max_str_digits() to increase the limit",
+  "existing_required_suite": "22 cases passed; did not cover long valid leading-zero representations",
+  "followup": "Add both representations to the controller-owned delivery fixture and require 24 passing cases on future source candidates",
+  "evidence_origin": "explicit_parent_functional_probe; not a claimed controller-recorded required-test execution",
+  "production_authorization": false
+}

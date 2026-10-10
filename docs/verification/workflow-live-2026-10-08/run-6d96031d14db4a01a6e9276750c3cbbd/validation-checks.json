@@ -1,0 +1,109 @@
+{
+  "schema_version": 1,
+  "scope": "bounded_builder_debugger_workflow_acceptance",
+  "status": "PASS",
+  "source_candidate_sha256": "63fdaa79a5a7eef748f741f2fef5b7b9df4d1ea70c10a611bd8dfc365a4bbf7e",
+  "source_manifest_files": 47,
+  "report": "workflow-acceptance-6395e5d8b3844a6f9750f614b30bc143.json",
+  "workdir": "/Users/avipattan/flawless-diamond-piece",
+  "deterministic_checks": [
+    {
+      "command": "env TMPDIR=\"/var/folders/7g/r534nhd54h9ff_xyfpy0t0240000gn/T/omnirush\" DIAMOND_PYTHON=python3.11 PYTHONDONTWRITEBYTECODE=1 ./scripts/check.sh",
+      "exit_code": 0,
+      "tests_passed": 140,
+      "python_files_compiled_in_memory": 44,
+      "enforced_python_file_line_limit": 500,
+      "bytecode_written": false
+    },
+    {
+      "command": "env TMPDIR=\"/var/folders/7g/r534nhd54h9ff_xyfpy0t0240000gn/T/omnirush\" PYTHONPATH=\"src:tests\" PYTHONDONTWRITEBYTECODE=1 python3.12 -B -W error::ResourceWarning -m unittest discover -s tests -q",
+      "exit_code": 0,
+      "tests_passed": 140
+    },
+    {
+      "command": "env TMPDIR=\"/var/folders/7g/r534nhd54h9ff_xyfpy0t0240000gn/T/omnirush\" PYTHONPATH=\"src:tests\" PYTHONDONTWRITEBYTECODE=1 python3.14 -B -W error::ResourceWarning -m unittest discover -s tests -q",
+      "exit_code": 0,
+      "tests_passed": 140
+    }
+  ],
+  "live_command": "env TMPDIR=\"/var/folders/7g/r534nhd54h9ff_xyfpy0t0240000gn/T/omnirush\" PYTHONPATH=\"src:tests\" PYTHONDONTWRITEBYTECODE=1 python3.11 -B \"scripts/workflow-live.py\"",
+  "live_exit_code": 0,
+  "live_workflows": [
+    {
+      "workflow_id": "65a61a3a1e1d4aa8b97d5cfd8f660b07",
+      "fixture": "build-from-brief",
+      "status": "VERIFIED",
+      "checks_passed": 22,
+      "corrections_used": 0,
+      "artifact": "duration-65a61a3a1e1d4aa8b97d5cfd8f660b07-final.py",
+      "artifact_sha256": "04a3257cc786bd80035f3fbebbd36ff2138ade4fbbe1930e3d493b7b6539421b"
+    },
+    {
+      "workflow_id": "c6ea23cab6f04eb2b5412d7f83475830",
+      "fixture": "imported-bug-reproduction-and-correction",
+      "fault_origin": "controller_acceptance_fixture",
+      "status": "VERIFIED",
+      "checks_passed": 22,
+      "corrections_used": 1,
+      "failed_and_reproduced_candidate_sha256": "5a92d89cfb18920df3d432cf9eece00757d478681861636b8ceec4ee6a9b5932",
+      "artifact": "duration-c6ea23cab6f04eb2b5412d7f83475830-final.py",
+      "artifact_sha256": "f21ee9f4ea8ebff471f573602598acb5b188eec4265224e50a7416ad1f82fd80"
+    }
+  ],
+  "independent_review": {
+    "reviewer_task_id": "ses_ee7f92ba9ffeg54GHQqOnD6bKh",
+    "code_and_fake_only_status": "PASS",
+    "code_and_fake_only_tests_passed": 51,
+    "source_contract_refinement_status": "PASS",
+    "real_receipt_status": "PASS",
+    "real_read_only_cli_restarts_verified": 2,
+    "requested_reported_models": "UNKNOWN",
+    "production_acceptance": "NOT_ESTABLISHED"
+  },
+  "backup_validation": {
+    "status": "PASS",
+    "database_schema_version": 5,
+    "database": "diamond.sqlite3",
+    "backup": "verified-backup.sqlite3",
+    "integrity_check": "ok",
+    "foreign_key_violations": 0,
+    "all_table_rows_match": true,
+    "task_attempt_workflow_replays_match": true,
+    "semantic_rows_sha256": "cfcbf698d13de3cad3341c0b356125d86af7200b9ba93e1c3be3359511839130",
+    "row_counts": {
+      "tasks": 3,
+      "events": 3,
+      "commands": 3,
+      "attempts": 3,
+      "attempt_commands": 9,
+      "attempt_evidence": 32,
+      "dispatch_claims": 3,
+      "workflows": 2,
+      "workflow_events": 11,
+      "workflow_commands": 11
+    }
+  },
+  "security_scan": {
+    "command": "ruflo security scan",
+    "exit_code": 0,
+    "critical": 0,
+    "high": 0,
+    "medium": 0,
+    "low": 0,
+    "warning": "Controller index not found: /Users/avipattan/node_modules/agentdb/dist/controllers/index.js",
+    "requested_codex_flow_package": "Previously failed with npm E404; installed ruflo used"
+  },
+  "remaining_gates": [
+    "dependency_aware_candidate_integration",
+    "independent_qa_reviewer_release_workflows",
+    "installed_skill_capability_integration",
+    "internal_provider_tool_policy_beyond_claude",
+    "recovery_backed_quarantine_release_resume",
+    "filesystem_sqlite_crash_recovery",
+    "clean_installation_packaging",
+    "gemini_live_after_explicit_quota_confirmation",
+    "independent_end_to_end_production_acceptance"
+  ],
+  "gemini": "NOT_INVOKED_QUOTA_BLOCKED",
+  "astro": "BLOCKED_PENDING_PRODUCTION_ACCEPTANCE_AND_SEPARATE_BRIEF"
+}
