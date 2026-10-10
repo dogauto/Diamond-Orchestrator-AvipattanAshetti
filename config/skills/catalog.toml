@@ -1,0 +1,57 @@
+schema_version = 1
+
+[[skills]]
+name = "systematic-debugging"
+source_path = "config/skills/superpowers/systematic-debugging.md"
+source_url = "https://raw.githubusercontent.com/obra/superpowers/8ca22dba9a94f28898bbce59f2537ff4d87c747d/skills/systematic-debugging/SKILL.md"
+source_commit = "8ca22dba9a94f28898bbce59f2537ff4d87c747d"
+git_blob_sha1 = "095d194ac041502905f15b01d22d294fb94db8b2"
+source_sha256 = "808fc5717aa88ad65efff312b11c186294d3e6ee301afb584e2f86599b137787"
+license = "MIT"
+supplied_version = "superpowers-v6.4.2"
+scope = "Root-cause investigation and bounded debugging"
+applicable_roles = ["debugger"]
+dependencies = ["test-driven-development", "verification-before-completion"]
+required_capabilities = []
+
+[[skills]]
+name = "test-driven-development"
+source_path = "config/skills/superpowers/test-driven-development.md"
+source_url = "https://raw.githubusercontent.com/obra/superpowers/8ca22dba9a94f28898bbce59f2537ff4d87c747d/skills/test-driven-development/SKILL.md"
+source_commit = "8ca22dba9a94f28898bbce59f2537ff4d87c747d"
+git_blob_sha1 = "46838cc9e893c06259e3bdad0fc2425b36242f15"
+source_sha256 = "64b03fce4aee5a97a93160cea8111f3ba13a17b7c001db4bd5836d67fd10705d"
+license = "MIT"
+supplied_version = "superpowers-v6.4.2"
+scope = "Test-first feature and bug-fix development"
+applicable_roles = ["builder", "debugger", "qa"]
+dependencies = []
+required_capabilities = []
+
+[[skills]]
+name = "verification-before-completion"
+source_path = "config/skills/superpowers/verification-before-completion.md"
+source_url = "https://raw.githubusercontent.com/obra/superpowers/8ca22dba9a94f28898bbce59f2537ff4d87c747d/skills/verification-before-completion/SKILL.md"
+source_commit = "8ca22dba9a94f28898bbce59f2537ff4d87c747d"
+git_blob_sha1 = "7d45333cc4a49c57a80df6c1fe2fa777a207afbc"
+source_sha256 = "2befe7fc55bcadaa3d97dd9e8efeb633d2561c0ebe74c5a8b17c4d9e7e4520b3"
+license = "MIT"
+supplied_version = "superpowers-v6.4.2"
+scope = "Fresh controller evidence before success claims"
+applicable_roles = ["builder", "debugger", "integrator", "qa", "reviewer", "release"]
+dependencies = []
+required_capabilities = []
+
+[[skills]]
+name = "code-review-excellence"
+source_path = "config/skills/wshobson/code-review-excellence.md"
+source_url = "https://raw.githubusercontent.com/wshobson/agents/46891e7e60da0e52baf1050b7b6391b64e84c6d9/plugins/developer-essentials/skills/code-review-excellence/SKILL.md"
+source_commit = "46891e7e60da0e52baf1050b7b6391b64e84c6d9"
+git_blob_sha1 = "747aae267d996b1eb5826e4c0c42f6e81784dc0f"
+source_sha256 = "014fff1c8db75807106484d5b16451607f0dde266ae50182a2753d68ad3449ed"
+license = "MIT"
+supplied_version = "agents-main@46891e7e60da0e52baf1050b7b6391b64e84c6d9"
+scope = "Evidence-backed code, architecture, security, and test review"
+applicable_roles = ["architect", "integrator", "qa", "reviewer", "release"]
+dependencies = []
+required_capabilities = []

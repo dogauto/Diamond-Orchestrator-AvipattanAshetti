@@ -1,0 +1,44 @@
+schema_version = 1
+project_name = "Flawless Diamond Piece"
+
+[controller]
+max_workers = 2
+task_timeout_seconds = 900
+correction_round_limit = 2
+
+# Portable command names; enabled does not establish auth or live readiness.
+[providers.gemini]
+executable = "gemini"
+enabled = true
+
+[providers.antigravity]
+executable = "agy"
+enabled = true
+
+[providers.codex]
+executable = "codex"
+enabled = true
+
+[providers.omnirush]
+executable = "omnirush"
+enabled = true
+
+[providers.copilot]
+executable = "copilot"
+enabled = true
+
+[providers.claude]
+executable = "claude"
+enabled = true
+
+# Primary role assignments; Controller is software, not a model-backed role.
+[roles]
+planner = "antigravity"
+researcher = "antigravity"
+architect = "claude"
+builder = "claude"
+integrator = "claude"
+debugger = "codex"
+qa = "copilot"
+reviewer = "codex"
+release = "copilot"

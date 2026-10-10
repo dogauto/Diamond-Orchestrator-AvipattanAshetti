@@ -1,0 +1,48 @@
+# Embedded git repos and unrelated projects
+ComputeHive/
+after-effects-mcp/
+ayush-care-website-48/
+clawd/
+__agent__/
+ae-agent-skills/
+agent/
+jarvis/
+supabase/
+thrml-os/
+distributed-llm/
+omnirush.ai/
+pinterest-scraper/
+"new gen astro agents  copy/"
+"new gen astro agents /"
+flawless-diamond-piece/
+"New shit /"
+Music/
+IMG_0524.jpeg
+index.js
+package-lock.json
+package.json
+dino.py
+"#dino.py"
+"import random.py"
+love_to_agi.py
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+*.egg-info/
+.eggs/
+
+# IDE / OS
+.DS_Store
+.vscode/
+.swiftpm/
+.swarm/
+.claude-flow/
+.diamond/
+.diamond_history
+.bash_history
+.claude.json.rea.backup
+.diamond_history

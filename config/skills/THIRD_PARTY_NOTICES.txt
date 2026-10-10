@@ -1,0 +1,15 @@
+Third-party skill notices
+
+The following Markdown skill files are vendored as advisory, controller-governed
+process guidance. They do not grant tools, permissions, network access, or
+authority to override Diamond contracts.
+
+obra/superpowers skill files
+Copyright (c) 2025 Jesse Vincent
+Licensed under the MIT License.
+Source license: https://raw.githubusercontent.com/obra/superpowers/v6.4.2/LICENSE
+
+wshobson/agents code-review-excellence
+Copyright notice and license are reproduced from the pinned repository license:
+MIT License, Copyright (c) 2024 Seth Hobson.
+Source license: https://raw.githubusercontent.com/wshobson/agents/46891e7e60da0e52baf1050b7b6391b64e84c6d9/LICENSE
