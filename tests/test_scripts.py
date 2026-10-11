@@ -1,7 +1,9 @@
 import os
+import json
 import shutil
 import subprocess
 import sys
+from unittest.mock import patch
 
 from support import ROOT, ProjectCase
 
@@ -66,3 +68,21 @@ class ScriptTests(ProjectCase):
         result = self.launch("check.sh")
         self.assertNotEqual(result.returncode, 0)
         self.assertNotIn("PASS:", result.stdout)
+
+    def test_demo_state_is_external_and_provider_calls_are_stubbed(self) -> None:
+        log = self.base / "calls.jsonl"
+        launcher = self.project / "scripts/diamond.sh"
+        launcher.write_text(
+            f"#!{sys.executable}\nimport json,sys\n"
+            f"with open({str(log)!r}, 'a') as out: out.write(json.dumps(sys.argv[1:]) + '\\n')\n"
+            "print(json.dumps({'result': {'workflow': {'spec': {'workflow_id': 'a' * 32}}}}))\n")
+        launcher.chmod(0o755)
+        with patch.dict(os.environ, {"TMPDIR": str(self.base)}):
+            result = self.launch("local.sh", "demo")
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        calls = [json.loads(line) for line in log.read_text().splitlines()]
+        self.assertEqual(len(calls), 2)
+        for call in calls:
+            self.assertIn("--state-dir", call)
+            self.assertEqual(call[call.index("--state-dir") + 1], str(self.base / "flawless-diamond-demo-state"))
+        self.assertFalse((self.project / ".diamond").exists())

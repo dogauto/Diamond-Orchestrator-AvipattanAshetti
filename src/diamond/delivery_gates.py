@@ -79,7 +79,8 @@ def verified_tests(ledger: EventStore, snapshot: DeliverySnapshot, role: Role, i
         result = canonical_json({"phase": data["phase"], "candidate_digest": data["candidate_digest"], "outcome": outcome})
         intent = canonical_json({"phase": data["phase"], "candidate_digest": data["candidate_digest"],
                                 "test": test.to_dict(), "started_at": outcome["started_at"],
-                                "environment": {"PYTHONDONTWRITEBYTECODE": "1", "PYTHONPATH": "", "PYTHONHOME": "", "PYTHONNOUSERSITE": "1"}})
+                                "environment": {"PYTHONDONTWRITEBYTECODE": "1", "PYTHONPATH": snapshot.spec.workspace_root,
+                                                "PYTHONHOME": "", "PYTHONNOUSERSITE": "1"}})
         if not any(item.attempt_id == owner and item.kind == "test_result" and item.payload_json == result for item in records):
             raise ExecutionGuardError("aggregate verification is missing actual individual test evidence")
         if not any(item.attempt_id == owner and item.kind == "test_launch_intent" and item.payload_json == intent for item in records):

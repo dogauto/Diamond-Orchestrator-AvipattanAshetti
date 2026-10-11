@@ -12,7 +12,7 @@ from .integration import capture_components, integration_response
 from .store import EventStore
 from .test_inputs import capture_test_inputs, verify_test_inputs
 from .validation import bounded_int, canonical_json, command_id, parse_canonical_json, task_id, utc_now
-from .workspace import apply_response, workspace_manifest
+from .workspace import Publication, PublicationRollbackError, workspace_manifest
 
 
 def reduce_event(current: DeliverySnapshot | None, kind: str, payload: dict, timestamp: str) -> DeliverySnapshot:
@@ -167,17 +167,24 @@ class DeliveryStore:
 
     def publish(self, expected: DeliverySnapshot, provider_id: str) -> DeliverySnapshot:
         key = f"delivery:{expected.spec.delivery_id}:apply:{expected.revision}"
-        with self.ledger._connection(write=True) as connection:
-            self._authorized(connection, expected, key)
-            response, _ = provider_response(self.ledger, expected, Role.INTEGRATOR, provider_id)
-            replacements = integration_response(expected.spec.components_json, expected.spec.base_manifest_json, response)
-            verify_test_inputs(expected.test_inputs_json)
-            if expected.status is not DeliveryStatus.INTEGRATING:
-                raise ExecutionGuardError("only Integrator publishes accepted source selections")
-            manifest, artifacts = apply_response(expected.spec.work_spec(), expected.manifest_json, replacements)
-            payload = {"manifest_json": manifest, "decisions_json": canonical_json(response["decisions"]),
-                       "artifacts": [item.to_dict() for item in artifacts], "provider_evidence_id": provider_id}
-            return self._commit(connection, expected, "FILES_APPLIED", payload, expected.spec.delivery_id, key, canonical_json(payload))
+        try:
+            with Publication(Path(expected.spec.workspace_root)) as publication, self.ledger._connection(write=True) as connection:
+                self._authorized(connection, expected, key)
+                response, _ = provider_response(self.ledger, expected, Role.INTEGRATOR, provider_id)
+                replacements = integration_response(expected.spec.components_json, expected.spec.base_manifest_json, response)
+                verify_test_inputs(expected.test_inputs_json)
+                if expected.status is not DeliveryStatus.INTEGRATING:
+                    raise ExecutionGuardError("only Integrator publishes accepted source selections")
+                manifest, artifacts = publication.apply(expected.spec.work_spec(), expected.manifest_json, replacements)
+                payload = {"manifest_json": manifest, "decisions_json": canonical_json(response["decisions"]),
+                           "artifacts": [item.to_dict() for item in artifacts], "provider_evidence_id": provider_id}
+                return self._commit(connection, expected, "FILES_APPLIED", payload, expected.spec.delivery_id, key, canonical_json(payload))
+        except PublicationRollbackError as exc:
+            try:
+                self.invalidate(expected, "Publication rollback incomplete; inspect workspace before reconciliation")
+            except (StorageError, ConflictError) as quarantine_error:
+                exc.add_note(f"Could not persist quarantine; retain active ownership: {quarantine_error}")
+            raise
 
     def finish(self, expected: DeliverySnapshot, provider_id: str, tests_id: str) -> DeliverySnapshot:
         if expected.status not in RUNNING:

@@ -83,21 +83,7 @@ def cmd_workflow_show(shell: Any, args: list[str]) -> tuple[dict, bool]:
 
 
 def cmd_workflow_step(shell: Any, args: list[str]) -> tuple[dict, bool]:
-    if len(args) < 2:
-        from .shell_ui import red
-        print(red("usage: workflow step <workflow-id> --expected-revision <N>"))
-        return {}, False
-    rev = 1
-    for i, a in enumerate(args):
-        if a == "--expected-revision" and i + 1 < len(args):
-            try:
-                rev = int(args[i + 1])
-            except ValueError:
-                from .shell_ui import red
-                print(red("expected-revision must be an integer"))
-                return {}, False
-    return shell._run_cmd(["--json", "workflow", "step"] + [args[0],
-            "--expected-revision", str(rev)])
+    return shell._run_cmd(["--json", "workflow", "step"] + args)
 
 
 def cmd_workflow_events(shell: Any, args: list[str]) -> tuple[dict, bool]:
@@ -109,6 +95,8 @@ def cmd_workflow_events(shell: Any, args: list[str]) -> tuple[dict, bool]:
 
 
 def cmd_workflow_create(shell: Any, args: list[str]) -> tuple[dict, bool]:
+    if args:
+        return shell._run_cmd(["--json", "workflow", "create"] + args)
     from .shell_ui import yellow
     print(yellow("Use: ./scripts/diamond.sh --json workflow create --help for full syntax."))
     print("Example:")
@@ -153,11 +141,11 @@ def cmd_task_create(shell: Any, args: list[str]) -> tuple[dict, bool]:
 
 
 def cmd_provider_configure(shell: Any, args: list[str]) -> tuple[dict, bool]:
-    if not args or args[0] != "configure":
+    if not args:
         from .shell_ui import red
         print(red("usage: provider configure <name> --url <url>"))
         return {}, False
-    return shell._run_cmd(["--json"] + args)
+    return shell._run_cmd(["--json", "provider", "configure"] + args)
 
 
 def cmd_provider_models(shell: Any, args: list[str]) -> tuple[dict, bool]:
@@ -178,6 +166,8 @@ def cmd_smoke(shell: Any, args: list[str]) -> tuple[dict, bool]:
 
 
 def cmd_self_improve_create(shell: Any, args: list[str]) -> tuple[dict, bool]:
+    if args:
+        return shell._run_cmd(["--json", "self-improve", "create"] + args)
     from .shell_ui import yellow
     print(yellow("Use: ./scripts/diamond.sh --json self-improve create --help"))
     return {}, True
@@ -236,8 +226,9 @@ def cmd_exit(shell: Any, args: list[str]) -> tuple[dict, bool]:
     raise SystemExit(0)
 
 
-def cmd_clear(shell: Any, args: list[str]) -> None:
+def cmd_clear(shell: Any, args: list[str]) -> tuple[dict, bool]:
     os.system("clear")
+    return {}, True
 
 
 def cmd_history(shell: Any, args: list[str]) -> tuple[dict, bool]:
@@ -304,7 +295,7 @@ def cmd_chat(shell: Any, args: list[str]) -> tuple[dict, bool]:
                 print(f"\n{dim(f'Current model: {model}')}")
             continue
         if user_input.lower() == "/status":
-            result, ok = shell._run_cmd(["--json", "status"])
+            result, ok = shell._run_cmd(["--json", "project", "status"])
             shell._display(result, ok, "status")
             continue
 
@@ -368,7 +359,12 @@ def _dispatch(shell: Any, raw: str) -> None:
     if not stripped or stripped.startswith("#"):
         return
 
-    parts = shlex.split(stripped)
+    try:
+        parts = shlex.split(stripped)
+    except ValueError as exc:
+        from .shell_ui import red
+        print(f"{red('ERROR')}: {exc}")
+        return
     if not parts:
         return
 

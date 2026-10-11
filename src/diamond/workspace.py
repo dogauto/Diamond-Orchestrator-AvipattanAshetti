@@ -2,9 +2,10 @@ import hashlib
 import os
 import tempfile
 from pathlib import Path
-from stat import S_ISREG
+from stat import S_IMODE, S_ISREG
+from types import TracebackType
 
-from .errors import ConflictError, ValidationError
+from .errors import ConflictError, StorageError, ValidationError
 from .evidence import digest_text
 from .packets import ArtifactRef
 from .validation import canonical_json, exact_keys, parse_canonical_json
@@ -43,7 +44,120 @@ def verify_workspace(spec: WorkflowSpec, expected_manifest: str) -> Path:
     return root
 
 
+class PublicationRollbackError(StorageError):
+    pass
+
+
+class Publication:
+    """Undo caught publication failures, including a surrounding ledger commit failure.
+
+    This in-memory undo log cannot make filesystem changes crash-atomic with SQLite.
+    The caller's active workflow/delivery reservation must remain held until completion.
+    """
+
+    def __init__(self, root: Path) -> None:
+        self.root = root
+        self.originals: dict[Path, tuple[bytes | None, int | None]] = {}
+        self.installed: list[tuple[Path, bytes, int]] = []
+        self.temporaries: set[Path] = set()
+        self.directories: list[Path] = []
+
+    def __enter__(self) -> "Publication":
+        return self
+
+    def _state(self, target: Path) -> tuple[bytes | None, int | None]:
+        if target.is_symlink() or target.parent.resolve(strict=True) != target.parent:
+            raise ConflictError("owned file path changed during publication")
+        if not target.exists():
+            return None, None
+        info = target.stat()
+        if not S_ISREG(info.st_mode):
+            raise ConflictError("owned output is no longer a regular file")
+        return target.read_bytes(), S_IMODE(info.st_mode)
+
+    def _write(self, target: Path, content: bytes, mode: int, prefix: str) -> Path:
+        descriptor, name = tempfile.mkstemp(prefix=prefix, dir=target.parent)
+        temporary = Path(name)
+        self.temporaries.add(temporary)
+        with os.fdopen(descriptor, "wb") as output:
+            output.write(content)
+            output.flush()
+            os.fchmod(output.fileno(), mode)
+            os.fsync(output.fileno())
+        return temporary
+
+    def stage(self, target: Path, content: bytes, expected_digest: str | None) -> tuple[Path, Path, bytes, int]:
+        missing = []
+        parent = target.parent
+        while not parent.exists():
+            missing.append(parent)
+            parent = parent.parent
+        if parent.resolve(strict=True) != parent or not parent.is_relative_to(self.root):
+            raise ConflictError("owned output parent changed or escapes workspace")
+        for directory in reversed(missing):
+            directory.mkdir()
+            self.directories.append(directory)
+        original, mode = self._state(target)
+        if (hashlib.sha256(original).hexdigest() if original is not None else None) != expected_digest:
+            raise ConflictError("owned file changed during staging; preserve the current edit")
+        self.originals[target] = original, mode
+        output_mode = mode if mode is not None else 0o600
+        return self._write(target, content, output_mode, ".diamond-stage-"), target, content, output_mode
+
+    def install(self, temporary: Path, target: Path, content: bytes, mode: int) -> None:
+        if self._state(target) != self.originals[target]:
+            raise ConflictError("owned file changed during staging; preserve the current edit")
+        os.replace(temporary, target)
+        self.temporaries.remove(temporary)
+        self.installed.append((target, content, mode))
+
+    def apply(self, spec: WorkflowSpec, manifest_json: str, response: object) -> tuple[str, tuple[ArtifactRef, ...]]:
+        return _apply_response(spec, manifest_json, response, self)
+
+    def __exit__(self, kind: type[BaseException] | None, error: BaseException | None,
+                 traceback: TracebackType | None) -> None:
+        if kind is None:
+            return
+        failures = []
+        for target, content, mode in reversed(self.installed):
+            recovery = None
+            try:
+                current = self._state(target)
+                original, original_mode = self.originals[target]
+                if original is not None:
+                    recovery = self._write(target, original, original_mode, ".diamond-rollback-")
+                if current != (content, mode):
+                    raise ConflictError("published file changed; preserving intervening edit")
+                if recovery is None:
+                    target.unlink()
+                else:
+                    os.replace(recovery, target)
+                    self.temporaries.remove(recovery)
+            except (OSError, ConflictError) as exc:
+                if recovery is not None:
+                    self.temporaries.discard(recovery)
+                failures.append(f"{target}: {exc}" + (f"; original retained at {recovery}" if recovery is not None else ""))
+        for temporary in sorted(self.temporaries):
+            try:
+                temporary.unlink(missing_ok=True)
+            except OSError as exc:
+                failures.append(f"{temporary}: {exc}")
+        for directory in reversed(self.directories):
+            try:
+                directory.rmdir()
+            except OSError as exc:
+                failures.append(f"{directory}: {exc}")
+        if failures:
+            raise PublicationRollbackError("publication rollback incomplete; retain quarantine and reconcile: " + "; ".join(failures)) from error
+
+
 def apply_response(spec: WorkflowSpec, manifest_json: str, response: object) -> tuple[str, tuple[ArtifactRef, ...]]:
+    with Publication(Path(spec.workspace_root)) as publication:
+        return publication.apply(spec, manifest_json, response)
+
+
+def _apply_response(spec: WorkflowSpec, manifest_json: str, response: object,
+                    publication: Publication) -> tuple[str, tuple[ArtifactRef, ...]]:
     root = verify_workspace(spec, manifest_json)
     data = exact_keys(response, {"files", "summary"}, "Builder file response")
     if type(data["summary"]) is not str or not data["summary"].strip() or len(data["summary"]) > 4096:
@@ -81,30 +195,11 @@ def apply_response(spec: WorkflowSpec, manifest_json: str, response: object) -> 
     if len(canonical_json(future_files)) > 32768:
         raise ValidationError("serialized owned source exceeds the correction-context budget")
     staged = []
-    try:
-        for relative, content in replacements.items():
-            target = root / relative
-            target.parent.mkdir(parents=True, exist_ok=True)
-            if not target.parent.resolve(strict=True).is_relative_to(root):
-                raise ValidationError("owned output parent escapes workspace")
-            descriptor, temporary = tempfile.mkstemp(prefix=".diamond-stage-", dir=target.parent)
-            with os.fdopen(descriptor, "w", encoding="utf-8") as output:
-                output.write(content)
-                output.flush()
-                os.fsync(output.fileno())
-            staged.append((Path(temporary), target))
-        for temporary, target in staged:
-            relative = str(target.relative_to(root))
-            existing = manifest.get(relative)
-            if target.is_symlink() or target.parent.resolve(strict=True) != target.parent:
-                raise ConflictError("owned file path changed during staging")
-            actual = hashlib.sha256(target.read_bytes()).hexdigest() if target.exists() else None
-            if actual != (existing["sha256"] if existing else None):
-                raise ConflictError("owned file changed during staging; preserve the current edit")
-            os.replace(temporary, target)
-    finally:
-        for temporary, _ in staged:
-            temporary.unlink(missing_ok=True)
+    for relative, content in replacements.items():
+        existing = manifest.get(relative)
+        staged.append(publication.stage(root / relative, content.encode("utf-8"), existing["sha256"] if existing else None))
+    for replacement in staged:
+        publication.install(*replacement)
     after = workspace_manifest(root)
     before_entries = manifest
     after_entries = parse_canonical_json(after)

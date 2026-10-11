@@ -144,3 +144,32 @@ class McpTests(ProjectCase):
         responses = [json.loads(line) for line in outgoing.getvalue().splitlines()]
         self.assertEqual([response["id"] for response in responses], [1, 2])
         self.assertEqual(responses[1]["result"], {})
+
+    def test_malformed_protocol_versions_return_errors_and_connection_survives(self) -> None:
+        for version in ([], {}, True, 1, None):
+            with self.subTest(version=version):
+                server = self.make_server()
+                response = server.handle({"jsonrpc": "2.0", "id": 1, "method": "initialize",
+                                          "params": {"protocolVersion": version}})
+                self.assertEqual(response["error"]["code"], -32602)
+                self.initialize(server)
+
+    def test_initialized_notification_alone_does_not_bypass_handshake(self) -> None:
+        server = self.make_server()
+        server.handle({"jsonrpc": "2.0", "method": "notifications/initialized"})
+        response = server.handle({"jsonrpc": "2.0", "id": 1, "method": "tools/list"})
+        self.assertEqual(response["error"]["code"], -32002)
+
+    def test_unknown_tool_arguments_are_rejected_before_controller_invocation(self) -> None:
+        calls = []
+        server = self.make_server(lambda command: calls.append(command))
+        self.initialize(server)
+        response = server.handle({"jsonrpc": "2.0", "id": 2, "method": "tools/call", "params": {
+            "name": "diamond_get_workflow", "arguments": {"workflow_id": "a" * 32, "unexpected": True}}})
+        self.assertEqual(response["error"]["code"], -32602)
+        self.assertEqual(calls, [])
+
+    def test_invalid_list_notification_remains_silent(self) -> None:
+        server = self.make_server()
+        self.initialize(server)
+        self.assertIsNone(server.handle({"jsonrpc": "2.0", "method": "tools/list", "params": {"unknown": 1}}))

@@ -92,20 +92,21 @@ def _fetch_sse(url: str, payload: dict[str, Any], key: str) -> list[dict[str, An
             "User-Agent": "diamond-chat/1",
         },
     )
-    resp = urllib.request.urlopen(req, timeout=TIMEOUT)
     chunks: list[dict[str, Any]] = []
-    for line in resp:
-        raw = line.decode("utf-8").strip()
-        if not raw or not raw.startswith("data: "):
-            continue
-        try:
-            obj = json.loads(raw[6:])
-            if obj.get("object") == "chat.completion.chunk":
-                chunks.append(obj)
-            elif obj.get("object") == "chat.completion":
-                chunks.append(obj)
-        except (json.JSONDecodeError, KeyError):
-            pass
+    with urllib.request.urlopen(req, timeout=TIMEOUT) as resp:
+        for line in resp:
+            raw = line.decode("utf-8").strip()
+            if not raw.startswith("data:"):
+                continue
+            data = raw[5:].strip()
+            if data == "[DONE]":
+                break
+            try:
+                obj = json.loads(data)
+                if isinstance(obj, dict) and obj.get("object") in {"chat.completion.chunk", "chat.completion"}:
+                    chunks.append(obj)
+            except json.JSONDecodeError:
+                pass
     return chunks
 
 
@@ -115,7 +116,7 @@ def _extract_text(chunks: list[dict[str, Any]]) -> str:
         choices = c.get("choices", [])
         if not choices:
             continue
-        delta = choices[0].get("delta", {})
+        delta = choices[0].get("delta", choices[0].get("message", {}))
         msg = delta.get("content")
         if msg:
             parts.append(msg)

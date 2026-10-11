@@ -31,16 +31,28 @@ def delivery_occupancy(connection: sqlite3.Connection, current: DeliverySnapshot
 
 
 def protect_workspace_writers(connection: sqlite3.Connection, root: Path) -> None:
+    protect_owned_paths(connection, (root,))
+
+
+def protect_owned_paths(connection: sqlite3.Connection, paths: tuple[Path, ...],
+                        task_id: str | None = None, attempt_id: str | None = None) -> None:
     for row in connection.execute("SELECT snapshot_json FROM workflows WHERE status IN ('BUILDING','DEBUGGING','BLOCKED')"):
-        spec = parse_canonical_json(row[0])["spec"]
-        if any((Path(spec["workspace_root"]) / path).is_relative_to(root) or root.is_relative_to(Path(spec["workspace_root"]) / path)
-               for path in spec["owned_paths"]):
-            raise ConflictError("delivery overlaps an active or quarantined workflow")
+        snapshot = parse_canonical_json(row[0])
+        spec = snapshot["spec"]
+        if attempt_id is not None and (snapshot["active_task_id"], snapshot["active_attempt_id"]) == (task_id, attempt_id):
+            if snapshot["status"] == "BLOCKED":
+                raise ConflictError("workflow is quarantined; launch authorization is blocked")
+            continue
+        if any(first.is_relative_to(second) or second.is_relative_to(first)
+               for first in paths for second in (Path(spec["workspace_root"]) / path for path in spec["owned_paths"])):
+            raise ConflictError("ownership overlaps an active or quarantined workflow")
     for row in connection.execute("SELECT packet_json FROM dispatch_claims JOIN attempts USING(attempt_id) WHERE status IN ('INTENDED','STARTED','AMBIGUOUS')"):
         packet = parse_canonical_json(row[0])
-        if any((Path(packet["workspace_root"]) / path).is_relative_to(root) or root.is_relative_to(Path(packet["workspace_root"]) / path)
-               for path in packet["owned_paths"]):
-            raise ConflictError("delivery overlaps an unresolved writing attempt")
+        if attempt_id is not None and (packet["task_id"], packet["attempt_id"]) == (task_id, attempt_id):
+            continue
+        if any(first.is_relative_to(second) or second.is_relative_to(first)
+               for first in paths for second in (Path(packet["workspace_root"]) / path for path in packet["owned_paths"])):
+            raise ConflictError("ownership overlaps an unresolved writing attempt")
 
 
 def worker_occupancy(connection: sqlite3.Connection) -> tuple[int, set[str]]:

@@ -191,6 +191,7 @@ class McpServer:
     def __init__(self, paths: ProjectPaths, *, invoke: Callable[[list[str]], tuple[int, dict[str, Any]]] | None = None) -> None:
         self.paths = paths
         self.initialized = False
+        self._initialize_received = False
         self._invoke = invoke or self._invoke_controller
 
     def _invoke_controller(self, command: list[str]) -> tuple[int, dict[str, Any]]:
@@ -223,6 +224,8 @@ class McpServer:
         if not isinstance(request, dict) or request.get("jsonrpc") != "2.0" or not isinstance(request.get("method"), str):
             return self._error(request.get("id") if isinstance(request, dict) else None, -32600, "Invalid Request")
         identifier = request.get("id")
+        if "id" in request and type(identifier) not in (str, int):
+            return self._error(None, -32600, "Invalid Request ID")
         method = request["method"]
         is_notification = "id" not in request
 
@@ -232,7 +235,11 @@ class McpServer:
             except McpRequestError as exc:
                 return None if is_notification else self._error(identifier, -32602, str(exc))
             requested = params.get("protocolVersion")
+            if not isinstance(requested, str) or not requested:
+                return None if is_notification else self._error(identifier, -32602, "protocolVersion must be a non-empty string")
             selected = requested if requested in SUPPORTED_PROTOCOL_VERSIONS else PROTOCOL_VERSION
+            if not is_notification:
+                self._initialize_received = True
             return self._response(identifier, {
                 "protocolVersion": selected,
                 "capabilities": {"tools": {"listChanged": False}},
@@ -240,7 +247,8 @@ class McpServer:
                 "instructions": "Use read-only tools for inspection. Mutating tools require explicit confirm=true and remain subject to Diamond controller gates.",
             }) if not is_notification else None
         if method == "notifications/initialized":
-            self.initialized = True
+            if is_notification and self._initialize_received:
+                self.initialized = True
             return None
         if method == "ping":
             return None if is_notification else self._response(identifier, {})
@@ -252,7 +260,7 @@ class McpServer:
             except McpRequestError as exc:
                 return None if is_notification else self._error(identifier, -32602, str(exc))
             if set(params) - {"cursor"}:
-                return self._error(identifier, -32602, "tools/list accepts only cursor")
+                return None if is_notification else self._error(identifier, -32602, "tools/list accepts only cursor")
             return None if is_notification else self._response(identifier, {"tools": list(TOOLS)})
         if method == "tools/call":
             if is_notification:
@@ -273,6 +281,9 @@ class McpServer:
             raise McpRequestError(f"unknown tool: {name}")
         arguments = value.get("arguments", {})
         args = _object(arguments, "tool arguments")
+        allowed = _TOOL_BY_NAME[name]["inputSchema"]["properties"]
+        if set(args) - set(allowed):
+            raise McpRequestError("unknown tool arguments: " + ", ".join(sorted(set(args) - set(allowed))))
         command: list[str]
         if name == "diamond_validate_config":
             _no_arguments(args)
@@ -342,15 +353,25 @@ class McpServer:
 def serve_stdio(paths: ProjectPaths, stdin: TextIO = sys.stdin, stdout: TextIO = sys.stdout) -> int:
     """Run newline-delimited JSON-RPC over stdio until the client closes stdin."""
     server = McpServer(paths)
-    for raw_line in stdin.buffer if hasattr(stdin, "buffer") else stdin:
-        if isinstance(raw_line, bytes):
+    stream = stdin.buffer if hasattr(stdin, "buffer") else stdin
+    while True:
+        raw_line = stream.readline(MAX_MESSAGE_BYTES + 1)
+        if not raw_line:
+            break
+        if len(raw_line) > MAX_MESSAGE_BYTES:
+            ending = b"\n" if isinstance(raw_line, bytes) else "\n"
+            remainder = raw_line
+            while remainder and not remainder.endswith(ending):
+                remainder = stream.readline(MAX_MESSAGE_BYTES + 1)
+            response = server._error(None, -32700, "Message exceeds the 1 MiB limit")
+        elif isinstance(raw_line, bytes):
             if len(raw_line) > MAX_MESSAGE_BYTES:
                 response = server._error(None, -32700, "Message exceeds the 1 MiB limit")
             else:
                 try:
                     request = json.loads(raw_line.decode("utf-8"))
                     response = server.handle(request)
-                except (UnicodeDecodeError, json.JSONDecodeError):
+                except (UnicodeDecodeError, ValueError, RecursionError):
                     response = server._error(None, -32700, "Parse error")
         else:
             if len(raw_line.encode("utf-8")) > MAX_MESSAGE_BYTES:
@@ -358,7 +379,7 @@ def serve_stdio(paths: ProjectPaths, stdin: TextIO = sys.stdin, stdout: TextIO =
             else:
                 try:
                     response = server.handle(json.loads(raw_line))
-                except (UnicodeDecodeError, json.JSONDecodeError):
+                except (UnicodeDecodeError, ValueError, RecursionError):
                     response = server._error(None, -32700, "Parse error")
         if response is not None:
             stdout.write(json.dumps(response, sort_keys=True, separators=(",", ":")) + "\n")

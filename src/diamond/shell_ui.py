@@ -1,6 +1,7 @@
 """UI utilities for the Diamond interactive shell."""
 import os
 from pathlib import Path
+from typing import Any
 
 
 def _c(codes: tuple[int, ...]) -> str:
@@ -51,7 +52,7 @@ def _format_status(result: dict[str, Any], ok: bool) -> str:
         for w in r["workflows"]:
             st = w.get("status", "?")
             oid = w.get("spec", {}).get("objective", "")[:50]
-            wid = w.get("workflow_id", "?")[:12]
+            wid = w.get("spec", {}).get("workflow_id", "?")[:12]
             icon = _OK if st == "VERIFIED" else (_FAIL if st in ("EXHAUSTED", "BLOCKED") else _INFO)
             lines.append(f"  {icon} [{wid}] {st:12s}  {oid}")
         lines.append("")
@@ -60,7 +61,7 @@ def _format_status(result: dict[str, Any], ok: bool) -> str:
         lines.append(bold("Deliveries"))
         for d in r["deliveries"]:
             st = d.get("status", "?")
-            lines.append(f"  {_INFO} [{d.get('delivery_id', '?')[:12]}] {st}")
+            lines.append(f"  {_INFO} [{d.get('spec', {}).get('delivery_id', '?')[:12]}] {st}")
         lines.append("")
 
     if "tasks" in r:

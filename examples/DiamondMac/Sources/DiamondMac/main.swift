@@ -141,7 +141,11 @@ final class DiamondClient: ObservableObject {
         isLoading = true
         message = "Reconciling \(workflow.id)..."
         Task {
-            defer { isLoading = false }
+            var refreshNeeded = false
+            defer {
+                isLoading = false
+                if refreshNeeded { refresh() }
+            }
             do {
                 let response = try await run([
                     "workflow", "reconcile", workflow.id,
@@ -155,7 +159,7 @@ final class DiamondClient: ObservableObject {
                                   userInfo: [NSLocalizedDescriptionKey: envelope.error?.message ?? "Controller rejected reconciliation"])
                 }
                 message = "Workflow reconciled. Refreshing controller state..."
-                refresh()
+                refreshNeeded = true
             } catch {
                 message = "Recovery action failed: \(error.localizedDescription)"
             }
@@ -259,14 +263,16 @@ final class DiamondClient: ObservableObject {
         isLoading = true
         commandMessage = "Running \(input)..."
         Task {
-            defer { isLoading = false }
+            var refreshNeeded = false
+            defer {
+                isLoading = false
+                if refreshNeeded { refresh() }
+            }
             do {
                 let response = try await run(command)
                 commandOutput = Self.prettyJSON(response)
                 commandMessage = "Command completed."
-                if command.first == "project" {
-                    refresh()
-                }
+                refreshNeeded = command.first == "project"
             } catch {
                 commandOutput = ""
                 commandMessage = "Command failed: \(error.localizedDescription)"
@@ -315,10 +321,15 @@ final class DiamondClient: ObservableObject {
             process.standardOutput = output
             process.standardError = error
             try process.run()
+            async let outputData = Task.detached { output.fileHandleForReading.readDataToEndOfFile() }.value
+            async let errorData = Task.detached { error.fileHandleForReading.readDataToEndOfFile() }.value
             process.waitUntilExit()
-            let data = output.fileHandleForReading.readDataToEndOfFile()
+            let (data, errors) = await (outputData, errorData)
             guard process.terminationStatus == 0 else {
-                let details = String(data: error.fileHandleForReading.readDataToEndOfFile(), encoding: .utf8) ?? "unknown error"
+                let envelope = try? JSONDecoder().decode(WorkflowEnvelope.self, from: data)
+                let details = envelope?.error?.message
+                    ?? String(data: errors.isEmpty ? data : errors, encoding: .utf8)
+                    ?? "unknown error"
                 throw NSError(domain: "DiamondController", code: Int(process.terminationStatus),
                               userInfo: [NSLocalizedDescriptionKey: details])
             }
@@ -337,10 +348,12 @@ final class DiamondClient: ObservableObject {
             process.standardOutput = output
             process.standardError = error
             try process.run()
+            async let outputData = Task.detached { output.fileHandleForReading.readDataToEndOfFile() }.value
+            async let errorData = Task.detached { error.fileHandleForReading.readDataToEndOfFile() }.value
             process.waitUntilExit()
-            let data = output.fileHandleForReading.readDataToEndOfFile()
+            let (data, errors) = await (outputData, errorData)
             guard process.terminationStatus == 0 else {
-                let details = String(data: error.fileHandleForReading.readDataToEndOfFile(), encoding: .utf8) ?? "unknown error"
+                let details = String(data: errors.isEmpty ? data : errors, encoding: .utf8) ?? "unknown error"
                 throw NSError(domain: "DiamondLocalLauncher", code: Int(process.terminationStatus),
                               userInfo: [NSLocalizedDescriptionKey: details])
             }

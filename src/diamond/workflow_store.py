@@ -130,17 +130,11 @@ class WorkflowStore:
             if current is None and expected_revision != 0 or current is not None and current.revision != expected_revision:
                 raise ConflictError("workflow revision is stale")
             if event_type == "STARTED":
-                from .occupancy import protect_delivery_roots, worker_occupancy
+                from .occupancy import protect_delivery_roots, protect_owned_paths, worker_occupancy
                 protect_delivery_roots(connection, tuple(Path(current.spec.workspace_root) / path for path in current.spec.owned_paths))
-                active = connection.execute("SELECT snapshot_json FROM workflows WHERE status IN ('BUILDING','DEBUGGING','BLOCKED')").fetchall()
                 if worker_occupancy(connection)[0] >= current.spec.max_workers:
                     raise ConflictError("workflow worker capacity is occupied")
-                targets = [Path(current.spec.workspace_root) / path for path in current.spec.owned_paths]
-                for row in active:
-                    other = self._decode(row[0])
-                    if any(first.is_relative_to(second) or second.is_relative_to(first)
-                           for first in targets for second in (Path(other.spec.workspace_root) / path for path in other.spec.owned_paths)):
-                        raise ConflictError("workflow ownership overlaps an active workflow")
+                protect_owned_paths(connection, tuple(Path(current.spec.workspace_root) / path for path in current.spec.owned_paths))
             return self._commit(connection, current, workflow_id, event_type, payload, command_id, request)
 
     def create(self, spec: WorkflowSpec, command_id: str) -> WorkflowSnapshot:
@@ -149,11 +143,13 @@ class WorkflowStore:
         return self.mutate(spec.workflow_id, "CREATED", {"spec": spec.to_dict()}, 0, command_id)
 
     def reconcile(self, workflow_id: str, expected_revision: int, reason: str, command_id: str) -> WorkflowSnapshot:
+        from .workspace import verify_workspace
         current = self.get(workflow_id)
         if current.status is not WorkflowStatus.BLOCKED:
             raise ExecutionGuardError("workflow is not blocked and does not need reconciliation")
         if current.active_task_id is None or current.active_attempt_id is None:
             raise StorageError("blocked workflow has no active recovery identity")
+        verify_workspace(current.spec, current.manifest_json)
         text_reason = redact_text(reason, 4096)
         attempt = self.ledger.get_attempt(current.active_attempt_id)
         if attempt.task_id != current.active_task_id:
@@ -178,20 +174,28 @@ class WorkflowStore:
                            expected_revision, command_id, one_shot=True)
 
     def publish(self, expected: WorkflowSnapshot, response: object) -> tuple[WorkflowSnapshot, tuple[ArtifactRef, ...]]:
-        from .workspace import apply_response
+        from .workspace import Publication, PublicationRollbackError
         workflow_id = expected.spec.workflow_id
         command_id = f"workflow:{workflow_id}:apply:{expected.revision}"
-        with self.ledger._connection(write=True) as connection:
-            current = self._read(connection, workflow_id)
-            if current != expected or current.status not in {WorkflowStatus.BUILDING, WorkflowStatus.DEBUGGING}:
-                raise ConflictError("workflow authorization changed before publishing files")
-            from .occupancy import protect_delivery_roots
-            protect_delivery_roots(connection, tuple(Path(current.spec.workspace_root) / path for path in current.spec.owned_paths))
-            manifest, artifacts = apply_response(current.spec, current.manifest_json, response)
-            payload = {"manifest_json": manifest, "artifacts": [artifact.to_dict() for artifact in artifacts]}
-            request = canonical_json({"operation": "publish_files", "workflow_id": workflow_id,
-                                      "expected_revision": expected.revision, "response_digest": digest_text(canonical_json(response))})
-            return self._commit(connection, current, workflow_id, "FILES_APPLIED", payload, command_id, request), artifacts
+        try:
+            with Publication(Path(expected.spec.workspace_root)) as publication, self.ledger._connection(write=True) as connection:
+                current = self._read(connection, workflow_id)
+                if current != expected or current.status not in {WorkflowStatus.BUILDING, WorkflowStatus.DEBUGGING}:
+                    raise ConflictError("workflow authorization changed before publishing files")
+                from .occupancy import protect_delivery_roots
+                protect_delivery_roots(connection, tuple(Path(current.spec.workspace_root) / path for path in current.spec.owned_paths))
+                manifest, artifacts = publication.apply(current.spec, current.manifest_json, response)
+                payload = {"manifest_json": manifest, "artifacts": [artifact.to_dict() for artifact in artifacts]}
+                request = canonical_json({"operation": "publish_files", "workflow_id": workflow_id,
+                                          "expected_revision": expected.revision, "response_digest": digest_text(canonical_json(response))})
+                return self._commit(connection, current, workflow_id, "FILES_APPLIED", payload, command_id, request), artifacts
+        except PublicationRollbackError as exc:
+            try:
+                self.mutate(workflow_id, "BLOCKED", {"reason": "Publication rollback incomplete; inspect workspace before reconciliation"},
+                            expected.revision, f"{command_id}:rollback-block")
+            except (StorageError, ConflictError) as quarantine_error:
+                exc.add_note(f"Could not persist quarantine; retain active ownership: {quarantine_error}")
+            raise
 
     def get(self, workflow_id: str) -> WorkflowSnapshot:
         task_id(workflow_id)

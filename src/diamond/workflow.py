@@ -35,12 +35,13 @@ async def required_tests(ledger: EventStore, snapshot: WorkflowSnapshot, phase: 
     candidate = digest_text(snapshot.manifest_json)
     outcomes = []
     secrets = environment_secrets()
+    test_environment = dict(TEST_ENVIRONMENT, PYTHONPATH=str(root))
     for index, test in enumerate(spec.tests):
         verify_workspace(spec, snapshot.manifest_json)
         started_at = utc_now()
         suffix = f"test:{phase}:{index}"
         record(ledger, snapshot.active_attempt_id, "test_launch_intent", {"phase": phase, "candidate_digest": candidate,
-            "test": test.to_dict(), "started_at": started_at, "environment": TEST_ENVIRONMENT}, f"{suffix}:intent")
+            "test": test.to_dict(), "started_at": started_at, "environment": test_environment}, f"{suffix}:intent")
 
         def on_started(pid, identity) -> None:
             record(ledger, snapshot.active_attempt_id, "test_process_started", {"phase": phase, "name": test.name,
@@ -50,7 +51,7 @@ async def required_tests(ledger: EventStore, snapshot: WorkflowSnapshot, phase: 
         cancelled = False
         try:
             result = await run(invocation, root, test.timeout_seconds, test.output_limit,
-                               TEST_ENVIRONMENT, enforce_paths=True, on_started=on_started)
+                               test_environment, enforce_paths=True, on_started=on_started)
         except CancelledExecution as exc:
             result, cancelled = exc.result, True
         outcome = {"name": test.name, "argv": list(test.argv), "started_at": started_at,

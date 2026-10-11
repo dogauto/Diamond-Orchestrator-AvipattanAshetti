@@ -98,21 +98,15 @@ def reserve(store: "EventStore", packet: TaskPacket, attempt: ExecutionAttempt, 
                               (packet.task_id, packet.task_revision)).fetchone():
             raise ConflictError("task revision already has a dispatch claim; refusing a second launch")
         active = "('INTENDED','STARTED','AMBIGUOUS')"
-        from .occupancy import protect_delivery_roots, worker_occupancy
+        from .occupancy import protect_delivery_roots, protect_owned_paths, worker_occupancy
         protect_delivery_roots(connection, tuple(Path(packet.workspace_root) / value for value in packet.owned_paths))
         if connection.execute(f"SELECT 1 FROM attempts WHERE task_id=? AND status IN {active}", (packet.task_id,)).fetchone():
             raise ConflictError("task has an unresolved attempt; reconcile before reserving another revision")
         workers, covered = worker_occupancy(connection)
         if workers + int(packet.attempt_id not in covered) > max_workers:
             raise ConflictError("controller worker capacity is occupied; keep the task queued")
-        for row in connection.execute(f"""SELECT packet_json FROM dispatch_claims
-                JOIN attempts USING(attempt_id) WHERE attempts.status IN {active}"""):
-            other = parse_canonical_json(row[0])
-            existing_paths = tuple(Path(other["workspace_root"]) / value for value in other["owned_paths"])
-            new_paths = tuple(Path(packet.workspace_root) / value for value in packet.owned_paths)
-            if any(first.is_relative_to(second) or second.is_relative_to(first)
-                   for first in existing_paths for second in new_paths):
-                raise ConflictError("owned paths overlap an unresolved dispatch claim")
+        protect_owned_paths(connection, tuple(Path(packet.workspace_root) / value for value in packet.owned_paths),
+                            packet.task_id, packet.attempt_id)
         if connection.execute("SELECT 1 FROM attempts WHERE attempt_id=?", (attempt.attempt_id,)).fetchone():
             raise ConflictError("attempt already exists; use its original dispatch command")
         store._insert_attempt(connection, attempt, intent_command,
@@ -139,9 +133,11 @@ def acquire_start(store: "EventStore", claim: DispatchClaim, command_id: str) ->
         if connection.execute("SELECT 1 FROM attempt_commands WHERE command_id=?", (command_id,)).fetchone():
             raise ConflictError("launch command already consumed; refusing blind relaunch")
         current = store._read_attempt(connection, claim.attempt_id)
-        from .occupancy import protect_delivery_roots
+        from .occupancy import protect_delivery_roots, protect_owned_paths
         packet = parse_canonical_json(row["packet_json"])
         protect_delivery_roots(connection, tuple(Path(packet["workspace_root"]) / value for value in packet["owned_paths"]))
+        protect_owned_paths(connection, tuple(Path(packet["workspace_root"]) / value for value in packet["owned_paths"]),
+                            claim.task_id, claim.attempt_id)
         task = store._read_task(connection, claim.task_id)
         if task.revision != claim.task_revision or task.status is not TaskStatus.CREATED:
             raise ConflictError("task authorization changed after reservation; launch refused")

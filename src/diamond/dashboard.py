@@ -226,8 +226,13 @@ function dot(status) {
 }
 
 function statusClass(s) {
-  const map = { verified:'verified', blocked:'blocked', failed:'failed', created:'created', succeeded:'succeeded' };
+  const map = { verified:'verified', blocked:'blocked', failed:'failed', created:'created', succeeded:'succeeded',
+    needs_correction:'blocked', exhausted:'failed', building:'created', debugging:'created' };
   return map[s.toLowerCase()] || 'created';
+}
+
+function escapeHtml(value) {
+  return String(value).replace(/[&<>'"]/g, character => ({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[character]));
 }
 
 function renderProviders(providers) {
@@ -236,9 +241,9 @@ function renderProviders(providers) {
   el.innerHTML = providers.map(p => `
     <div class="provider-row">
       ${dot(p.status)}
-      <span class="provider-name">${p.name}</span>
-      <span class="provider-ver">${p.version}</span>
-      <span class="provider-auth">${p.auth}</span>
+       <span class="provider-name">${escapeHtml(p.name)}</span>
+       <span class="provider-ver">${escapeHtml(p.version)}</span>
+       <span class="provider-auth">${escapeHtml(p.auth)}</span>
     </div>`).join('');
 }
 
@@ -247,10 +252,10 @@ function renderWorkflows(wfs) {
   if (!wfs.length) { el.innerHTML = '<div style="color:var(--muted);text-align:center;padding:16px;">No workflows yet. Run: diamond.sh workflow create</div>'; return; }
   el.innerHTML = wfs.map(w => `
     <div class="workflow-row">
-      <span class="wf-id">${w.id}</span>
-      <span class="wf-status ${statusClass(w.status)}">${w.status}</span>
-      <span class="wf-objective">${w.objective}</span>
-      <span class="wf-roles">B:${w.builder} D:${w.debugger}</span>
+       <span class="wf-id">${escapeHtml(w.id)}</span>
+       <span class="wf-status ${statusClass(w.status)}">${escapeHtml(w.status)}</span>
+       <span class="wf-objective">${escapeHtml(w.objective)}</span>
+       <span class="wf-roles">B:${escapeHtml(w.builder)} D:${escapeHtml(w.debugger)}</span>
     </div>`).join('');
 }
 
@@ -259,10 +264,10 @@ function renderTasks(tasks) {
   if (!tasks.length) { el.innerHTML = '<div style="color:var(--muted);text-align:center;padding:16px;">No tasks yet. Run: diamond.sh task create</div>'; return; }
   el.innerHTML = tasks.map(t => `
     <div class="task-row">
-      <span class="task-id">${t.id}</span>
-      <span class="task-status ${statusClass(t.status)}">${t.status}</span>
-      <span class="task-objective">${t.objective}</span>
-      <span class="task-role">${t.role}</span>
+       <span class="task-id">${escapeHtml(t.id)}</span>
+       <span class="task-status ${statusClass(t.status)}">${escapeHtml(t.status)}</span>
+       <span class="task-objective">${escapeHtml(t.objective)}</span>
+       <span class="task-role">${escapeHtml(t.role)}</span>
     </div>`).join('');
 }
 
@@ -271,9 +276,9 @@ function renderStats(d) {
   const wf = d.workflows.filter(w => w.status === 'VERIFIED').length;
   const el = document.getElementById('statsBar');
   el.innerHTML = `
-    <div class="stat-card"><div class="stat-num">${ok}/${d.providers.length}</div><div class="stat-label">Providers Live</div></div>
+    <div class="stat-card"><div class="stat-num">${ok}/${d.providers.length}</div><div class="stat-label">Providers Probed</div></div>
     <div class="stat-card"><div class="stat-num">${wf}</div><div class="stat-label">Verified Workflows</div></div>
-    <div class="stat-card"><div class="stat-num">${d.tasks.length}</div><div class="stat-label">Total Tasks</div></div>
+    <div class="stat-card"><div class="stat-num">${d.tasks.length}</div><div class="stat-label">Queued Tasks</div></div>
     <div class="stat-card"><div class="stat-num">${d.schema_version || 1}</div><div class="stat-label">Schema Version</div></div>
   `;
 }

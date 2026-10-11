@@ -60,7 +60,8 @@ case "$command_name" in
         ;;
     demo)
         demo_root="${TMPDIR:-/tmp}/flawless-diamond-demo"
-        if [ -e "$demo_root" ]; then
+        demo_state="$demo_root-state"
+        if [ -e "$demo_root" ] || [ -e "$demo_state" ]; then
             printf '%s\n' "Demo workspace already exists: $demo_root" >&2
             printf '%s\n' "Remove it manually if you want to start the demo again." >&2
             exit 2
@@ -78,7 +79,7 @@ print(greeting())
 EOF
         command_id="demo-workflow-$(date +%s)"
         test_json=$(printf '%s' "{\"name\":\"greeting check\",\"argv\":[\"/usr/bin/python3\",\"check_greeting.py\"],\"timeout_seconds\":10,\"output_limit\":4096}")
-        created=$("$script_dir/diamond.sh" --json workflow create \
+        created=$("$script_dir/diamond.sh" --state-dir "$demo_state" --json workflow create \
             --objective "Improve the greeting utility" \
             --workspace "$demo_root" \
             --owned-path greeting.py \
@@ -88,9 +89,9 @@ EOF
         printf '%s\n' "Demo workspace: $demo_root"
         printf '%s\n' "Workflow: $workflow_id"
         printf '%s\n' "Running one bounded provider step..."
-        "$script_dir/diamond.sh" --json workflow run "$workflow_id" --expected-revision 1
+        "$script_dir/diamond.sh" --state-dir "$demo_state" --json workflow run "$workflow_id" --expected-revision 1
         printf '%s\n' "Inspect the result with:"
-        printf '  %s\n' "$script_dir/diamond.sh workflow status $workflow_id"
+        printf '  %s\n' "\"$script_dir/diamond.sh\" --state-dir \"$demo_state\" workflow status $workflow_id"
         ;;
     mcp)
         exec "$script_dir/diamond.sh" mcp --stdio
