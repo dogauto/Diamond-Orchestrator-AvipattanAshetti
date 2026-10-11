@@ -214,7 +214,7 @@ def _verified(snapshot: WorkflowSnapshot, records: tuple[EvidenceRecord, ...], a
             _digest(outcome[f"{stream}_sha256"], "test output digest")
         expected_result = {"candidate_digest": candidate, "phase": phase, "outcome": outcome}
         expected_launch = {"candidate_digest": candidate, "phase": phase, "test": test.to_dict(), "started_at": outcome["started_at"],
-                           "environment": {"PYTHONDONTWRITEBYTECODE": "1", "PYTHONPATH": "", "PYTHONHOME": "", "PYTHONNOUSERSITE": "1"}}
+                           "environment": {"PYTHONDONTWRITEBYTECODE": "1", "PYTHONPATH": str(snapshot.spec.workspace_root), "PYTHONHOME": "", "PYTHONNOUSERSITE": "1"}}
         if sum(item.payload_json == canonical_json(expected_result) for item in results) != 1 or sum(
                 item.payload_json == canonical_json(expected_launch) for item in launches) != 1:
             raise ExecutionGuardError("aggregate tests do not match actual individual test evidence")
