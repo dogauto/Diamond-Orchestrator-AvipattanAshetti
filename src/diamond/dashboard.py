@@ -293,7 +293,17 @@ setInterval(loadData, 30000);
 def main(port: int = 8765) -> int:
     addr = ("127.0.0.1", port)
     server = HTTPServer(addr, DashboardHandler)
-    print(f"Diamond Dashboard running at http://127.0.0.1:{port}", flush=True)
+    url = f"http://127.0.0.1:{port}"
+    print(f"Diamond Dashboard running at {url}", flush=True)
+    # Auto-open in browser
+    try:
+        import subprocess
+        subprocess.Popen([
+            "open" if sys.platform == "darwin" else "xdg-open" if sys.platform.startswith("linux") else "start",
+            url
+        ], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    except Exception:
+        pass
     try:
         server.serve_forever()
     except KeyboardInterrupt:

@@ -5,6 +5,18 @@ script_dir=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd -P)
 project_root=$(CDPATH= cd -- "$script_dir/.." && pwd -P)
 mac_package="$project_root/examples/DiamondMac"
 
+# Resolve the Python interpreter the same way the project does elsewhere.
+python=${DIAMOND_PYTHON:-python3}
+if ! command -v "$python" >/dev/null 2>&1; then
+    printf '%s\n' "Python >=3.11 is required; set DIAMOND_PYTHON or install python3." >&2
+    exit 2
+fi
+if ! "$python" -c 'import sys; sys.exit(0 if sys.version_info >= (3,11) else 2)' 2>/dev/null; then
+    printf '%s\n' "Python >=3.11 is required; set DIAMOND_PYTHON to a 3.11+ interpreter." >&2
+    exit 2
+fi
+python=$(command -v "$python")
+
 usage() {
     cat <<'EOF'
 Flawless Diamond local launcher
@@ -61,11 +73,8 @@ case "$command_name" in
     demo)
         demo_root="${TMPDIR:-/tmp}/flawless-diamond-demo"
         demo_state="$demo_root-state"
-        if [ -e "$demo_root" ] || [ -e "$demo_state" ]; then
-            printf '%s\n' "Demo workspace already exists: $demo_root" >&2
-            printf '%s\n' "Remove it manually if you want to start the demo again." >&2
-            exit 2
-        fi
+        # Idempotent: clean up any previous demo run so re-running works.
+        rm -rf "$demo_root" "$demo_state"
         mkdir -p "$demo_root"
         cat > "$demo_root/greeting.py" <<'EOF'
 def greeting() -> str:
@@ -78,14 +87,14 @@ assert greeting() == "hello from Diamond"
 print(greeting())
 EOF
         command_id="demo-workflow-$(date +%s)"
-        test_json=$(printf '%s' "{\"name\":\"greeting check\",\"argv\":[\"/usr/bin/python3\",\"check_greeting.py\"],\"timeout_seconds\":10,\"output_limit\":4096}")
+        test_json=$(printf '%s' "{\"name\":\"greeting check\",\"argv\":[\"$python\",\"check_greeting.py\"],\"timeout_seconds\":10,\"output_limit\":4096}")
         created=$("$script_dir/diamond.sh" --state-dir "$demo_state" --json workflow create \
             --objective "Improve the greeting utility" \
             --workspace "$demo_root" \
             --owned-path greeting.py \
             --test "$test_json" \
             --command-id "$command_id")
-        workflow_id=$(printf '%s' "$created" | python3 -c 'import json,sys; print(json.load(sys.stdin)["result"]["workflow"]["spec"]["workflow_id"])')
+        workflow_id=$(printf '%s' "$created" | "$python" -c 'import json,sys; print(json.load(sys.stdin)["result"]["workflow"]["spec"]["workflow_id"])')
         printf '%s\n' "Demo workspace: $demo_root"
         printf '%s\n' "Workflow: $workflow_id"
         printf '%s\n' "Running one bounded provider step..."
