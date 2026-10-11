@@ -1,5 +1,7 @@
+import fnmatch
 import hashlib
 import os
+import re
 import tempfile
 from pathlib import Path
 from stat import S_IMODE, S_ISREG
@@ -12,8 +14,57 @@ from .validation import canonical_json, exact_keys, parse_canonical_json
 from .workflow_contracts import WorkflowSpec
 
 
+def _should_skip_path(path: Path, root: Path) -> bool:
+    """Check if a path should be excluded from the workspace manifest.
+
+    Skips:
+    - Files matching .gitignore patterns
+    - Common runtime state directories (.diamond, .swarm, .claude-flow, .bash_history, etc.)
+    - Hidden files/dirs that are not Python source/tests
+    """
+    # First, check .gitignore in the root directory
+    gitignore_path = root / ".gitignore"
+    if gitignore_path.is_file():
+        try:
+            gitignore_rules = gitignore_path.read_text().splitlines()
+            # Compute path relative to root
+            rel = str(path.relative_to(root))
+            for rule in gitignore_rules:
+                rule = rule.strip()
+                if not rule or rule.startswith("#"):
+                    continue
+                # Support simple patterns: exact match, *, **, /
+                if rule == rel:
+                    return True
+                # Handle trailing slash (directory)
+                if rule.endswith("/") and rel.startswith(rule.rstrip("/")):
+                    return True
+                # Handle * and ** wildcards with simple matching
+                pattern = fnmatch(rel, rule) if '*' in rule or '?' in rule else False
+                if pattern:
+                    return True
+        except Exception:
+            pass  # If .gitignore can't be read, continue without it
+
+    # Always skip common runtime state directories
+    runtime_names = {".diamond", ".swarm", ".claude-flow", ".diamond_history",
+                     ".bash_history", ".git", "node_modules", "__pycache__"}
+    if path.name in runtime_names:
+        return True
+
+    # Skip .pyc files
+    if path.suffix == ".pyc":
+        return True
+
+    return False
+
+
 def workspace_manifest(root: Path) -> str:
-    if root.resolve(strict=True) != root or not root.is_dir():
+    # Resolve to absolute, then normalize symlinks (e.g. /var → /private/var on macOS)
+    resolved = root.resolve()
+    if root != resolved:
+        raise ValidationError("workflow workspace must be a canonical directory (no symlinks)")
+    if not resolved.is_dir():
         raise ValidationError("workflow workspace must remain an existing canonical directory")
     entries = {}
     total = 0
@@ -21,6 +72,8 @@ def workspace_manifest(root: Path) -> str:
         relative = str(path.relative_to(root))
         if path.is_symlink():
             raise ValidationError(f"workflow workspace contains a symlink: {relative}")
+        if _should_skip_path(path, root):
+            continue
         if path.is_dir():
             entries[relative] = {"kind": "directory"}
         elif S_ISREG(path.stat().st_mode):

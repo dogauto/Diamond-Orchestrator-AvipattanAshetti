@@ -76,7 +76,7 @@ class DashboardHandler(BaseHTTPRequestHandler):
         body = json.dumps(data, indent=2).encode("utf-8")
         self.send_response(200)
         self.send_header("Content-Type", "application/json")
-        self.send_header("Access-Control-Allow-Origin", "*")
+        self.send_header("Access-Control-Allow-Origin", "http://127.0.0.1:8765")
         self.end_headers()
         self.wfile.write(body)
 
@@ -84,7 +84,7 @@ class DashboardHandler(BaseHTTPRequestHandler):
         html = HTML_TEMPLATE.encode("utf-8")
         self.send_response(200)
         self.send_header("Content-Type", "text/html; charset=utf-8")
-        self.send_header("Access-Control-Allow-Origin", "*")
+        self.send_header("Access-Control-Allow-Origin", "http://127.0.0.1:8765")
         self.end_headers()
         self.wfile.write(html)
 

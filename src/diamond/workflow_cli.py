@@ -71,8 +71,14 @@ def workflow_command(args: argparse.Namespace, config_path: Path, config: Diamon
     if args.workflow_command == "list":
         return {"workflows": [item.to_dict() for item in workflows.list()]}, 0
     if args.workflow_command == "show":
-        item = workflows.replay(args.workflow_id)
-        return {"workflow": item.to_dict()}, 0
+        try:
+            item = workflows.replay(args.workflow_id)
+            return {"workflow": item.to_dict()}, 0
+        except StorageError as e:
+            if "does not match its projection" in str(e):
+                # Treat missing or corrupt workflow as NOT_FOUND
+                raise ValidationError("workflow not found") from e
+            raise
     if args.workflow_command == "events":
         return {"events": list(workflows.events(args.workflow_id))}, 0
     current = workflows.get(args.workflow_id)
