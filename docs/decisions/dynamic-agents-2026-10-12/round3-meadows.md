@@ -1,0 +1,3 @@
+Repair A’s publication, recovery, authorization, and evidence first. Then permit a bounded profile trial; A remains the control, not a permanent equilibrium. Trial permission is not an adoption commitment. Promote B only for independently adjudicated durable usefulness exceeding a preregistered, maintenance-inclusive economic hurdle, with uncertainty and delayed outcomes accounted for. Keep evaluators fixed, all assignments and costs visible, and recovery constraints intact. Inconclusive results earn no promotion; version-scoped negative memory permits bounded requalification. C’s flexibility remains an unproved benefit.
+
+STANCE: staged-B | CONFIDENCE: med | DEALBREAKER: no

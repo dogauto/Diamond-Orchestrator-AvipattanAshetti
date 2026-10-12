@@ -1,0 +1,3 @@
+Support staged-B: repair A’s evidence, authorization, publication, and recovery; run a capped profile trial; promote only for attributable, maintenance-adjusted useful-change gains. Count every assignment and unresolved cost. Statistical gains cannot certify recovery. Inconclusive results retain A operationally, without proving challengers inferior. Bounded free-form composition remains a legitimate experimental challenger, not a demonstrated winner or a reason to require catalog adoption first. Prefer A-only if credible opportunity-cost evidence rules out worthwhile specialization. Current evidence establishes neither alternative’s superiority.
+
+STANCE: staged-B | CONFIDENCE: med | DEALBREAKER: no

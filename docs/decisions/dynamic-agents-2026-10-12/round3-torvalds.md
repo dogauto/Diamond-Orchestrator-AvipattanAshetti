@@ -1,0 +1,3 @@
+Repair A's publication, recovery, authorization and evidence first. Then trial two maintained instruction profiles within one existing role and fixed provider assignment, reusing packets, budgets, permissions and delivery gates. Fix dormant routing/health defects before routing integration. Promote only for independently accepted gains after maintenance costs; inconclusive results retain A. Profile compilation must preserve existing contracts, not introduce another workflow representation. A-only remains defensible if specialization cannot repay its costs. Free-form composition has not earned priority. Benefits remain unmeasured.
+
+STANCE: staged-B | CONFIDENCE: med | DEALBREAKER: no

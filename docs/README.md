@@ -13,6 +13,8 @@ review, and deterministic adapter/packet slices are implemented. See
 | [System design](architecture/SYSTEM_DESIGN.md) | Python modules, contracts, SQLite state, adapters and recovery |
 | [Roles and skills](architecture/ROLES_AND_SKILLS.md) | Assignments, bounded work, skill provenance and independent review |
 | [Implementation plan](plan/IMPLEMENTATION_PLAN.md) | Seven milestones and first authorized implementation slice |
+| [Dynamic agents plan](plan/DYNAMIC_AGENTS_PLAN.md) | Council-advised profile composition, provider routing, daily improvement, and acceptance milestones |
+| [Dynamic agents Council record](decisions/dynamic-agents-2026-10-12/README.md) | Verdict, tradeoffs, unresolved questions, and recorded deliberation |
 | [Phase gates](verification/PHASE_GATES.md) | Purpose, checks, evidence, pass/fail/block rules per phase |
 | [Acceptance criteria](verification/ACCEPTANCE_CRITERIA.md) | Falsifiable foundation, fault, live and release requirements |
 | [Status](progress/STATUS.md) | Initial state, supplied environment observations and unknown evidence |

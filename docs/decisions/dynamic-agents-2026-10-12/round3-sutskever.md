@@ -1,0 +1,3 @@
+Choose staged-B: repair A’s publication, recovery, authorization, and evidence; then run a bounded profile trial. Promotion requires independently accepted usefulness gains after all costs, including unresolved attempts and descendants. Inconclusive evidence retains A. Profiles and descendants must inherit fixed permissions, protected tests/evaluators, and aggregate budgets; native isolation requires verification, not identity hashes. Controller accounting alone is insufficient. B is an experiment, not compulsory catalog adoption. Free-form composition remains a sandbox research alternative whose measured superiority could change the choice.
+
+STANCE: staged-B | CONFIDENCE: med | DEALBREAKER: no

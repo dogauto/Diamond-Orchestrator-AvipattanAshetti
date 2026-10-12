@@ -1,0 +1,3 @@
+Repair A’s authorization, publication, rollback, and restart recovery before live trials. Then permit a budget-capped B comparison within the local monolith; promote only for independently accepted, maintenance-adjusted gains with recovery intact. Cancellation must durably fence publication without pretending external execution stopped. Preserve human edits and reconcile uncertainty before redispatch. Fixed routing is no safety exemption, and statistical gains cannot excuse invariant failures. A remains when evidence is inconclusive; B adoption is not obligatory. Neither counterfactual supplies measured evidence to overturn this sequence.
+
+STANCE: staged-B | CONFIDENCE: med | DEALBREAKER: no

@@ -1,0 +1,3 @@
+Repair publication, rollback and authorization first. Then permit a capped profile trial using existing packets, without compulsory teams or duplicate contracts. Promotion must repay implementation, evidence collection, review and maintenance costs while preserving recovery. Inconclusive results retain A; my counterfactual supports ending adaptation work when its optimistic benefit cannot repay its cost. B is an experiment, not a promised architecture. Bounded free-form composition remains a credible challenger, but its advantage is unmeasured. Do not mistake Council agreement for outcome evidence.
+
+STANCE: staged-B | CONFIDENCE: med | DEALBREAKER: no

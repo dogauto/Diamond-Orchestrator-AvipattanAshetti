@@ -1,0 +1,3 @@
+Repair authorization, evidence, publication and recovery, then trial bounded profiles against A. Reuse existing packets/manifests; add contracts only for missing invariants. Freeze routes at authorization; rebinding needs superseding authorization, preserved history and remaining budgets. Cancellation revokes publication authority without proving execution stopped; reconcile uncertainty before retry. Promote B only for demonstrated, maintenance-adjusted useful-change gains. Inconclusive evidence retains A operationally, not permanently. Neither greater expressiveness nor formal contracts establish benefit. C-first remains unsupported by current evidence.
+
+STANCE: staged-B | CONFIDENCE: med | DEALBREAKER: no

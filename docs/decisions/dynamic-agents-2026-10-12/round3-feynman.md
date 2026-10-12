@@ -1,0 +1,3 @@
+Repair publication, recovery, and evidence first; demonstrate that a VERIFIED shadow without independent delivery evidence cannot overwrite live files. Then test bounded profiles within existing packets against repaired fixed routing, changing one selection rule at a time. Promotion requires independently accepted useful gains after all costs, with recovery intact. Inconclusive evidence retains A operationally; it does not establish permanent superiority. A pilot is permission to learn, not an obligation to build a catalog. Free-form composition remains an unproven alternative.
+
+STANCE: staged-B | CONFIDENCE: med | DEALBREAKER: no

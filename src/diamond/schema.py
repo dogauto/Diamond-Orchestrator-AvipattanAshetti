@@ -6,8 +6,9 @@ from pathlib import Path
 from contextlib import closing
 
 from .errors import StorageError, ValidationError
+from .improvement_schema import STATEMENTS as IMPROVEMENT_STATEMENTS
 
-SCHEMA_VERSION = 7
+SCHEMA_VERSION = 8
 SCHEMA_STATEMENTS = (
     """CREATE TABLE tasks (
         task_id TEXT PRIMARY KEY, revision INTEGER NOT NULL CHECK(revision >= 1),
@@ -149,7 +150,7 @@ SCHEMA_STATEMENTS = (
         BEGIN SELECT RAISE(ABORT, 'provider_health is managed by controller'); END""",
     """CREATE TRIGGER provider_health_no_delete BEFORE DELETE ON provider_health
         BEGIN SELECT RAISE(ABORT, 'provider_health is managed by controller'); END""",
-)
+) + IMPROVEMENT_STATEMENTS
 
 _EVIDENCE_START = 9
 _DISPATCH_START = 18
@@ -160,7 +161,9 @@ MIGRATION_2_TO_3 = SCHEMA_STATEMENTS[_EVIDENCE_START:_DISPATCH_START]
 MIGRATION_3_TO_4 = SCHEMA_STATEMENTS[_DISPATCH_START:_WORKFLOW_START]
 MIGRATION_4_TO_5 = SCHEMA_STATEMENTS[_WORKFLOW_START:_DELIVERY_START]
 MIGRATION_5_TO_6 = SCHEMA_STATEMENTS[_DELIVERY_START:_MIGRATION_6_TO_7_START]
-MIGRATION_6_TO_7 = SCHEMA_STATEMENTS[_MIGRATION_6_TO_7_START:]
+_MIGRATION_7_TO_8_START = 43
+MIGRATION_6_TO_7 = SCHEMA_STATEMENTS[_MIGRATION_6_TO_7_START:_MIGRATION_7_TO_8_START]
+MIGRATION_7_TO_8 = SCHEMA_STATEMENTS[_MIGRATION_7_TO_8_START:]
 
 
 def _check_layout(connection: sqlite3.Connection, statements: tuple[str, ...]) -> None:
@@ -195,7 +198,8 @@ def check_schema(connection: sqlite3.Connection, initialize: bool = False) -> No
         raise StorageError(f"schema-{SCHEMA_VERSION} database is incomplete; restore or explicitly repair it")
     _check_layout(connection, SCHEMA_STATEMENTS)
     for table in ("events", "commands", "attempts", "attempt_commands", "attempt_evidence", "dispatch_claims",
-                   "workflows", "workflow_events", "workflow_commands", "deliveries", "delivery_events", "delivery_commands"):
+                   "workflows", "workflow_events", "workflow_commands", "deliveries", "delivery_events", "delivery_commands",
+                   "improvement_checkpoints", "improvement_publications", "improvement_publication_events"):
         try:
             connection.execute(f"SELECT _rowid_ FROM {table} LIMIT 0")
         except sqlite3.OperationalError as exc:
@@ -255,10 +259,16 @@ def migrate_schema(connection: sqlite3.Connection) -> None:
         _check_layout(connection, SCHEMA_STATEMENTS[:_MIGRATION_6_TO_7_START])
         for statement in MIGRATION_6_TO_7:
             connection.execute(statement)
+        connection.execute("PRAGMA user_version=7")
+        version = 7
+    if version == 7:
+        _check_layout(connection, SCHEMA_STATEMENTS[:_MIGRATION_7_TO_8_START])
+        for statement in MIGRATION_7_TO_8:
+            connection.execute(statement)
         connection.execute(f"PRAGMA user_version={SCHEMA_VERSION}")
         return
     if version != SCHEMA_VERSION:
-        raise StorageError(f"explicit migration supports schema 2, 3, 4, 5 or 6; found schema {version}")
+        raise StorageError(f"explicit migration supports schema 2 through 7; found schema {version}")
 
 
 def backup_ledger(connection: sqlite3.Connection, destination: Path) -> Path:

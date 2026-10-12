@@ -1,0 +1,3 @@
+Repair A's publication, recovery, authorization, and evidence before a capped B trial. Promote only for independently accepted useful gains after total costs; inconclusive results retain A. Keep profiles within existing role contracts and controller packets. Native agents are optional and require verified effective prompts, personal-profile precedence, tool/MCP limits, and provenance. Fresh sessions do not establish independent errors. Reauthorize fallbacks and reconcile uncertain outcomes. C remains experimental; B's adoption is contingent, not inevitable.
+
+STANCE: staged-B | CONFIDENCE: med | DEALBREAKER: no

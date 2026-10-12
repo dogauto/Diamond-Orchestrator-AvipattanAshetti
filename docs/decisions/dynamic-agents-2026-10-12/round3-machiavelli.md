@@ -1,0 +1,3 @@
+Repair publication, recovery, authorization and evidence under A, then run a capped B trial. Promotion requires independently accepted, durable usefulness after counting experimentation, retries, review, quotas and maintenance. The benefiting project’s budget owner must fund profile upkeep and its agreed share of controller work; evaluators remain independent of authors. Derive economic thresholds and sample requirements from workload and decision costs. Unfunded upkeep blocks promotion. Inconclusive evidence retains A operationally; C remains experimental. Comparative gains are still unknown.
+
+STANCE: staged-B | CONFIDENCE: med | DEALBREAKER: no
