@@ -2,6 +2,8 @@ import asyncio
 import hashlib
 import io
 import json
+import os
+import subprocess
 import sys
 from contextlib import redirect_stdout
 from pathlib import Path
@@ -15,7 +17,7 @@ from diamond.self_improve import publish_verified_changes
 from diamond.store import EventStore
 from diamond.delivery import run_stage
 import test_delivery
-from support import ProjectCase
+from support import ProjectCase, ROOT
 
 
 class SelfImproveTests(ProjectCase):
@@ -110,6 +112,11 @@ print(json.dumps({'result':json.dumps({'files':files,'summary':'value fix'}),'se
         self.assertEqual(self.source.read_text(), "human = 3\n")
         self.assertEqual(self.other.read_text(), "value = 2\n")
         self.assertEqual(self.command("status", self.workflow_id)["publication"]["status"], "BLOCKED")
+        self.source.write_text("value = 2\n")
+        self.source.chmod(0o700)
+        self.command("rollback", self.workflow_id, success=False)
+        self.assertEqual(self.source.stat().st_mode & 0o777, 0o700)
+        self.assertEqual(self.other.read_text(), "value = 2\n")
 
     def test_review_target_and_component_tampering_block_publication(self):
         identifier = self.accepted()
@@ -136,15 +143,22 @@ print(json.dumps({'result':json.dumps({'files':files,'summary':'value fix'}),'se
         self.assertEqual(self.source.read_text(), "value = 1\n")
 
     def test_interrupted_multifile_publication_recovers_in_fresh_process(self):
-        from diamond.improvement_publication import _replace
         identifier = self.accepted()
-
-        def interrupted(*args):
-            _replace(*args)
-            raise KeyboardInterrupt()
-
-        with patch("diamond.improvement_publication._replace", side_effect=interrupted):
-            self.command("publish", self.workflow_id, "--delivery-id", identifier, success=False)
+        code = """import os,sys
+from diamond import improvement_publication as publication
+from diamond.cli import main
+original = publication._replace
+def interrupted(*args):
+    original(*args)
+    os._exit(91)
+publication._replace = interrupted
+raise SystemExit(main(sys.argv[1:]))
+"""
+        crashed = subprocess.run([sys.executable, "-B", "-c", code, "--project", str(self.project),
+            "--state-dir", str(self.state), "--json", "self-improve", "publish", self.workflow_id,
+            "--delivery-id", identifier], capture_output=True, timeout=20,
+            env=dict(os.environ, PYTHONPATH=str(ROOT / "src")))
+        self.assertEqual(crashed.returncode, 91, crashed.stderr)
         self.assertEqual(self.source.read_text(), "value = 2\n")
         self.assertEqual(self.other.read_text(), "value = 1\n")
         self.assertEqual(self.command("status", self.workflow_id)["publication"]["status"], "PUBLISHING")
@@ -152,3 +166,16 @@ print(json.dumps({'result':json.dumps({'files':files,'summary':'value fix'}),'se
         self.assertEqual(result.returncode, 0, result.stdout)
         self.assertEqual(self.source.read_text(), "value = 1\n")
         self.assertEqual(self.other.read_text(), "value = 1\n")
+
+    def test_lost_publication_receipt_retains_recovery_intent(self):
+        from diamond.errors import StorageError
+        identifier = self.accepted()
+        with patch("diamond.improvement_store.ImprovementStore.transition", side_effect=StorageError("receipt unavailable")):
+            self.command("publish", self.workflow_id, "--delivery-id", identifier, success=False)
+        self.assertEqual(self.source.read_text(), "value = 2\n")
+        self.assertEqual(self.command("status", self.workflow_id)["publication"]["status"], "PUBLISHING")
+        self.command("publish", self.workflow_id, "--delivery-id", identifier, success=False)
+        self.command("reconcile", self.workflow_id)
+        self.assertEqual(self.source.read_text(), "value = 1\n")
+        self.assertEqual(self.other.read_text(), "value = 1\n")
+        self.assertEqual(self.command("status", self.workflow_id)["publication"]["status"], "ROLLED_BACK")

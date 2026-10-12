@@ -1,4 +1,5 @@
 # Untracked runtime state
+.diamond-publication.lock
 .diamond/
 .swarm/
 .claude-flow/

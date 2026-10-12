@@ -176,6 +176,50 @@ class AdapterTests(ProjectCase):
         with self.assertRaises(ProcessLookupError):
             os.kill(pids[0], 0)
 
+    def test_transient_permission_during_exit_requires_later_group_absence(self) -> None:
+        async def scenario():
+            process = await asyncio.create_subprocess_exec(sys.executable, "-B", "-c", "import time; time.sleep(0.05)",
+                start_new_session=True, stdin=asyncio.subprocess.DEVNULL,
+                stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE)
+            killpg = os.killpg
+            denied_until = asyncio.get_running_loop().time() + 0.08
+            observations = []
+
+            def transient(pid, sig):
+                if asyncio.get_running_loop().time() < denied_until:
+                    observations.append("denied")
+                    raise PermissionError("process exit race")
+                try:
+                    return killpg(pid, sig)
+                except ProcessLookupError:
+                    observations.append("absent")
+                    raise
+
+            try:
+                with patch("diamond.supervisor.os.killpg", side_effect=transient):
+                    self.assertTrue(await _terminate(process))
+                self.assertIn("denied", observations)
+                self.assertIn("absent", observations)
+                self.assertIsNotNone(process.returncode)
+            finally:
+                process._transport.close()
+                await process.wait()
+
+        asyncio.run(scenario())
+
+    def test_persistent_group_permission_denial_is_not_successful_cleanup(self) -> None:
+        async def scenario():
+            process = await asyncio.create_subprocess_exec(sys.executable, "-B", "-c", "pass", start_new_session=True,
+                stdin=asyncio.subprocess.DEVNULL, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE)
+            await process.communicate()
+            try:
+                with patch("diamond.supervisor.os.killpg", side_effect=PermissionError("unobservable group")):
+                    self.assertFalse(await _terminate(process))
+            finally:
+                process._transport.close()
+
+        asyncio.run(scenario())
+
     def test_repeated_cancellation_finishes_cleanup_and_keeps_partial_output(self) -> None:
         sleeper = self.fake("cancel twice", "import signal\nsignal.signal(signal.SIGTERM, signal.SIG_IGN)\n"
                             "print('started', flush=True)\ntime.sleep(30)")

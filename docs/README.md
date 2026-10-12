@@ -105,8 +105,9 @@ The orchestrator now exposes a gated self-improvement path. It can ask the
 configured Builder and Debugger roles to change existing Python source, but
 the controller rejects traversal, non-Python files, tests, configuration,
 launchers, the ledger, provider diagnostics, and supervisor safety code.
-Every request uses a separate state directory, snapshots owned files first,
-and requires the existing workflow test and evidence gates.
+Each request snapshots source, dependencies, policy, test inputs, and file
+modes into an isolated workspace. Its durable journal uses the project's
+`.diamond/` ledger by default; `--state-dir` selects another persistent ledger.
 
 Example:
 
@@ -114,7 +115,7 @@ Example:
 ./scripts/diamond.sh --json self-improve create \
   --objective "Improve the workflow status explanation" \
   --owned-path src/diamond/workflow_cli.py \
-  --test '{"name":"controller suite","argv":["/usr/bin/python3","-m","unittest","discover","-s","tests"],"timeout_seconds":120,"output_limit":65536}' \
+  --test '{"name":"controller suite","argv":["/bin/sh","scripts/check.sh"],"timeout_seconds":900,"output_limit":65536}' \
   --command-id improve-status-1
 ```
 
@@ -125,17 +126,51 @@ test-gated improvement step with the returned ID:
 ./scripts/diamond.sh --json self-improve run WORKFLOW_ID --expected-revision 1
 ```
 
-Inspect or explicitly roll back the owned files:
+`run` stops at a verified isolated candidate. Create an independent review,
+then advance the returned delivery ID through Integrator, QA, Reviewer, and
+Release using the current revision returned after each step:
+
+```sh
+./scripts/diamond.sh --json self-improve review WORKFLOW_ID --command-id improve-review-1
+./scripts/diamond.sh --json delivery step DELIVERY_ID --expected-revision REVISION
+./scripts/diamond.sh --json delivery certificate DELIVERY_ID
+./scripts/diamond.sh --json self-improve publish WORKFLOW_ID --delivery-id DELIVERY_ID
+```
+
+Only `publish` can promote the exact independently accepted bytes. It checks
+that live dependencies, tests, policy, and source still match their accepted
+base, then records publication intent before replacing any file.
+
+Inspect, cancel, recover, or explicitly roll back:
 
 ```sh
 ./scripts/diamond.sh --json self-improve status WORKFLOW_ID
 ./scripts/diamond.sh --json self-improve events WORKFLOW_ID
+./scripts/diamond.sh --json self-improve cancel WORKFLOW_ID --reason "Stop this improvement"
+./scripts/diamond.sh --json self-improve reconcile WORKFLOW_ID
 ./scripts/diamond.sh --json self-improve rollback WORKFLOW_ID
 ```
 
-`status` shows the current state, temporary workspace, and checkpoint path.
+`status` shows the current state, isolated workspace, checkpoint, and publication journal.
 `events` shows the immutable execution log, including provider-step starts,
-file publication, verification results, and failure details.
+workspace file application, verification results, and failure details. Both
+inspection commands include publication events. Cancellation persistently
+revokes promotion; it does not pretend an already running provider has exited.
+
+After an interrupted publication, `reconcile` restores the journaled originals.
+Rollback restores only files whose bytes and modes still match the installed
+candidate. Newer edits are preserved and the operation remains blocked for
+explicit reconciliation. An unpublished, unchanged candidate rolls back as a
+no-op. Filesystem replacement and SQLite are not one atomic transaction; the
+journal records and recovers the intermediate state.
+
+Schema 8 adds immutable improvement records and evidence indexes. Existing
+ledgers require the explicit `./scripts/diamond.sh --json migrate` command
+(include `--state-dir` for an external ledger). No automatic migration occurs.
+Historical checkpoints in `/tmp/flawless-diamond-self-improve-state` remain
+inspectable through `workflow show/events` after explicit migration of that
+ledger; they require a new improvement request before promotion because they
+lack retained project/base identity. New checkpoints use durable project state.
 
 This is not unrestricted self-training. Learning is retained as workflow
 evidence and verified source changes. The controller never grants the model
@@ -144,22 +179,39 @@ change.
 
 ## Daily improvement analysis
 
-The first daily-improvement slice is a read-only evidence analyzer. It reads
-recent controller evidence, deduplicates the same failure across test and
-verification records, ranks recurring candidates, and returns the exact
-evidence IDs that justify each recommendation:
+The read-only analyzer verifies persisted evidence digests and schemas, reads
+an indexed row/byte-bounded snapshot, and scopes evidence to this project or
+its recorded improvement workspaces. It retains all citations while counting
+attempts and known task lineages separately:
 
 ```sh
 ./scripts/diamond.sh --json daily-improve analyze \
   --window-hours 168 \
-  --max-candidates 5
+  --max-candidates 5 \
+  --max-records 1000 \
+  --max-bytes 8388608
 ```
 
-This command does not launch a provider, change source files, or publish a
-candidate. Its output is the bounded input for the future Researcher/Planner
-stage. A later execution command will be allowed to select owned paths and
-trusted tests only after a candidate has a reproducible baseline and an
-independent delivery review.
+Report schema 2 includes source identity, cutoff/watermark, excluded scope,
+truncation, provider version/model observations, and historical candidates.
+Scores and `evidence_support` are heuristic prioritization, not confidence
+probabilities. Reviewer findings remain unadjudicated claims. Later passing
+tests are retained as observations without erasing the original failures.
+
+Record a candidate decision using identifiers from that report:
+
+```sh
+./scripts/diamond.sh --json daily-improve disposition \
+  --signature SIGNATURE --source-digest SOURCE_DIGEST \
+  --status deferred --reason "Await a reproducible baseline" \
+  --evidence-id EVIDENCE_ID --cooldown-hours 24 --command-id candidate-decision-1
+```
+
+Statuses are `resolved`, `inapplicable`, `failed_experiment`, and `deferred`.
+Dispositions are immutable, evidence-cited, idempotent by command ID, and
+scoped to the current source digest. Cooldown expiry or source changes permit
+requalification. Discovery and dispositions do not launch providers or publish
+source; automated Researcher/Planner orchestration remains a later milestone.
 
 ## Foundation launch instructions
 

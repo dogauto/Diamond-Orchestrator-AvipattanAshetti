@@ -6,7 +6,7 @@ from .daily_improve import EvidenceInput, analyze_evidence
 from .errors import CommandConflictError, ConflictError, StorageError, ValidationError
 from .evidence import EvidenceRecord, digest_text, redact_text
 from .improvement_store import source_manifest
-from .validation import bounded_int, canonical_json, command_id, parse_canonical_json, text, utc_now
+from .validation import bounded_int, canonical_json, command_id, parse_canonical_json, text
 
 
 WINDOW_QUERY = """
@@ -107,14 +107,22 @@ def record_disposition(ledger, project: Path, signature: str, source_digest: str
         raise ValidationError("disposition requires distinct supporting evidence IDs")
     ids = canonical_json(sorted(evidence_ids))
     request = (str(project), source_digest, signature, status, reason, ids)
+
+    def prior_result(connection):
+        prior = connection.execute("SELECT * FROM improvement_dispositions WHERE command_id=?", (key,)).fetchone()
+        if prior is not None:
+            fields = ("project_root", "source_digest", "signature", "status", "reason", "evidence_ids_json")
+            duration = datetime.fromisoformat(prior["expires_at"]) - datetime.fromisoformat(prior["created_at"])
+            if tuple(prior[field] for field in fields) != request or duration != timedelta(hours=cooldown_hours):
+                raise CommandConflictError("disposition command ID was used for another decision")
+            return dict(prior)
+        return None
+
     if ledger._database_present():
         with ledger._connection(write=False) as connection:
-            prior = connection.execute("SELECT * FROM improvement_dispositions WHERE command_id=?", (key,)).fetchone()
+            prior = prior_result(connection)
             if prior is not None:
-                fields = ("project_root", "source_digest", "signature", "status", "reason", "evidence_ids_json")
-                if tuple(prior[field] for field in fields) != request:
-                    raise CommandConflictError("disposition command ID was used for another decision")
-                return dict(prior)
+                return prior
     report = analyze_snapshot(ledger, 168, 100, project=project, max_records=1000, max_bytes=8 * 1024 * 1024)
     if report.read_window["source_digest"] != source_digest:
         raise ConflictError("disposition source identity is stale")
@@ -125,5 +133,10 @@ def record_disposition(ledger, project: Path, signature: str, source_digest: str
     created = now.isoformat(timespec="microseconds").replace("+00:00", "Z")
     expires = (now + timedelta(hours=cooldown_hours)).isoformat(timespec="microseconds").replace("+00:00", "Z")
     with ledger._connection(write=True) as connection:
+        prior = prior_result(connection)
+        if prior is not None:
+            return prior
+        if digest_text(source_manifest(project)) != source_digest:
+            raise ConflictError("source changed before disposition commit")
         connection.execute("INSERT INTO improvement_dispositions VALUES (?,?,?,?,?,?,?,?,?)", (key, *request, created, expires))
         return dict(connection.execute("SELECT * FROM improvement_dispositions WHERE command_id=?", (key,)).fetchone())

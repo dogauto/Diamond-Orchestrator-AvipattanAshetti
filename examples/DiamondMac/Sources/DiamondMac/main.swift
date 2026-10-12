@@ -187,7 +187,7 @@ final class DiamondClient: ObservableObject {
                 } catch {
                     response = try await run([
                         "--state-dir", Self.selfImproveStateDirectory.path,
-                        "self-improve", "events", identifier, "--json"
+                        "workflow", "events", identifier, "--json"
                     ])
                 }
                 let object = try jsonObject(response)

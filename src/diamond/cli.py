@@ -2,9 +2,7 @@ import argparse
 import asyncio
 import json
 import os
-import shutil
 import sys
-import tempfile
 from pathlib import Path
 from typing import Any, Sequence
 from uuid import NAMESPACE_URL, uuid4, uuid5
@@ -17,7 +15,6 @@ from .errors import DiamondError, ValidationError
 from .paths import resolve_paths
 from .store import EventStore
 from .validation import command_id as validate_command_id
-from .validation import task_id as validate_task_id
 
 
 class ArgumentParser(argparse.ArgumentParser):

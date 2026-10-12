@@ -14,7 +14,7 @@ from typing import Any, Iterable
 from .store import EventStore
 from .evidence import digest_text
 from .validation import canonical_json
-from .validation import bounded_int, parse_canonical_json, utc_now
+from .validation import bounded_int, utc_now
 
 
 _DIGEST = re.compile(r"\b[0-9a-f]{32,64}\b")
@@ -268,7 +268,8 @@ def analyze_evidence(records: Iterable[EvidenceInput], window_hours: int = 168,
     passing = {}
     for record in records:
         evidence_records += 1
-        if record.kind == "required_tests" and record.payload.get("passed") is True:
+        if (record.kind == "required_tests" and record.payload.get("passed") is True
+                and isinstance(record.payload.get("tests"), list)):
             for test in record.payload.get("tests", []):
                 if isinstance(test, dict) and test.get("passed") is True and isinstance(test.get("name"), str):
                     key = (record.workspace, record.lineage, test["name"])

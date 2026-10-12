@@ -116,17 +116,17 @@ def persist_report(path: Path, report: dict[str, Any]) -> None:
 
 
 def verified_backup(project: Path, ledger: EventStore, state: Path, accepted: str) -> dict[str, Any]:
+    from diamond.schema import SCHEMA_STATEMENTS, SCHEMA_VERSION
     directory = state / "verified-backup"
     directory.mkdir()
     path = ledger.backup(directory / "diamond.sqlite3")
     restored = EventStore(path)
-    expected = {"tasks", "events", "commands", "attempts", "attempt_commands", "attempt_evidence", "dispatch_claims",
-                "workflows", "workflow_events", "workflow_commands", "deliveries", "delivery_events", "delivery_commands"}
+    expected = {statement.split()[2] for statement in SCHEMA_STATEMENTS if statement.startswith("CREATE TABLE")}
     rows = []
     for store in (ledger, restored):
         with store._connection(write=False) as connection:
             names = {row[0] for row in connection.execute("SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'")}
-            if names != expected or connection.execute("PRAGMA user_version").fetchone()[0] != 6:
+            if names != expected or connection.execute("PRAGMA user_version").fetchone()[0] != SCHEMA_VERSION:
                 raise RuntimeError("backup ledger tables/schema differ from the acceptance contract")
             if [tuple(row) for row in connection.execute("PRAGMA integrity_check")] != [("ok",)] or list(connection.execute("PRAGMA foreign_key_check")):
                 raise RuntimeError("backup ledger integrity or foreign-key validation failed")
@@ -157,7 +157,7 @@ def verified_backup(project: Path, ledger: EventStore, state: Path, accepted: st
         semantic.update(b"\0")
         semantic.update(canonical_json(rows[0][name]).encode("utf-8"))
         semantic.update(b"\0")
-    return {"status": "PASS", "database_schema_version": 6, "backup": str(path), "integrity_check": "ok",
+    return {"status": "PASS", "database_schema_version": SCHEMA_VERSION, "backup": str(path), "integrity_check": "ok",
         "foreign_key_violations": 0, "all_table_rows_match": True, "task_attempt_workflow_delivery_replays_match": True,
         "fresh_restored_cli_matches": True, "restored_certificate_matches": True,
         "row_counts": {name: len(values) for name, values in rows[0].items()}, "semantic_rows_sha256": semantic.hexdigest()}

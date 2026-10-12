@@ -1,10 +1,14 @@
 # Dynamic agents and provider routing: Council-advised plan
 
 Date: 2026-10-12. Source baseline: `65dc97f`.
-Status: **PLANNED; runtime integration not implemented by this decision task.**
+Status: **M0/M1 first implementation slice verified; M2–M6 remain planned.**
 Decision: [Council verdict](../decisions/dynamic-agents-2026-10-12/VERDICT.md).
 Evidence and uncertainty: [brief](../decisions/dynamic-agents-2026-10-12/BRIEF.md).
 Protocol, execution limitations and votes: [tally](../decisions/dynamic-agents-2026-10-12/TALLY.md).
+
+Implementation follow-up: [M0/M1 implementation and verification](../verification/COUNCIL_M0_M1.md).
+The baseline findings and Council transcript below retain their original scope;
+the follow-up identifies the repairs, commands, migration, and current checks.
 
 ## 1. What Diamond will do
 

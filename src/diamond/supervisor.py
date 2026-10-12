@@ -87,7 +87,9 @@ async def _terminate(process: asyncio.subprocess.Process) -> bool:
                     os.killpg(process.pid, sig)
                 elif process.returncode is None:
                     process.terminate() if sig == signal.SIGTERM else process.kill()
-            except ProcessLookupError:
+            except (ProcessLookupError, PermissionError):
+                # macOS can deny a group signal while its leader is exiting.
+                # Retain the deadline and require a later absence observation.
                 pass
             deadline = loop.time() + grace
             while loop.time() < deadline:
@@ -98,6 +100,8 @@ async def _terminate(process: asyncio.subprocess.Process) -> bool:
                         group_alive = True
                     except ProcessLookupError:
                         pass
+                    except PermissionError:
+                        group_alive = True
                 if process.returncode is not None and not group_alive:
                     await asyncio.wait_for(process.wait(), timeout=max(0.001, deadline - loop.time()))
                     return True

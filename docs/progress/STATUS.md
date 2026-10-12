@@ -2,6 +2,18 @@
 
 ## Current state
 
+### Council foundation update, 2026-10-12
+
+The [M0/M1 implementation](../verification/COUNCIL_M0_M1.md) is verified:
+330 Python tests pass, 90 Python files compile in memory, and the macOS client
+build passes. Self-improvement verification, independent delivery review,
+publication, cancellation, and recovery are distinct operations. Schema 8
+adds durable publication/disposition records and bounded evidence indexes;
+existing ledgers require explicit migration. Daily analysis retains scope,
+lineage, citations, and uncertainty. The M2 profile pilot and later adaptive
+routing remain planned. This checkpoint supersedes older test counts below;
+the historical live-provider and production-readiness limitations still apply.
+
 | Item | State |
 | --- | --- |
 | Project | Flawless Diamond Piece |
@@ -41,7 +53,7 @@ gates pass. The current release candidate is safe for bounded local use and
 macOS monitoring/control, but it is not certified for unattended production
 operation.
 
-## Latest readiness gate
+## Earlier readiness gate
 
 - `scripts/check.sh`: **PASS** — 227 tests, 62 Python files compiled in
   memory, no bytecode files written.
