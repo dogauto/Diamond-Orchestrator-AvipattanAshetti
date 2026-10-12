@@ -62,6 +62,18 @@ class ImprovementStore:
             connection.execute("INSERT INTO improvement_checkpoints VALUES (?,?,?,?)",
                                (workflow_id, str(project), manifest, config_digest))
 
+    def require_active(self, workflow_id: str) -> None:
+        with self.ledger._connection(write=False) as connection:
+            if connection.execute("SELECT 1 FROM improvement_cancellations WHERE workflow_id=?", (workflow_id,)).fetchone():
+                raise ExecutionGuardError("self-improvement is cancelled; late results cannot authorize publication")
+
+    def cancel(self, workflow_id: str, reason: str) -> None:
+        from .validation import text
+        text(reason, "cancellation reason", 4096)
+        with self.ledger._connection(write=True) as connection:
+            if not connection.execute("SELECT 1 FROM improvement_cancellations WHERE workflow_id=?", (workflow_id,)).fetchone():
+                connection.execute("INSERT INTO improvement_cancellations VALUES (?,?,?)", (workflow_id, utc_now(), reason))
+
     def publication(self, workflow_id: str) -> dict | None:
         with self.ledger._connection(write=False) as connection:
             row = connection.execute("SELECT * FROM improvement_publications WHERE workflow_id=?", (workflow_id,)).fetchone()

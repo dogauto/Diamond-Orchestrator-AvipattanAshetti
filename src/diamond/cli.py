@@ -149,6 +149,17 @@ def parser() -> argparse.ArgumentParser:
     improvement_events.add_argument("workflow_id")
     improvement_rollback = improvement_commands.add_parser("rollback")
     improvement_rollback.add_argument("workflow_id")
+    improvement_review = improvement_commands.add_parser("review", help="create an isolated independent delivery review")
+    improvement_review.add_argument("workflow_id")
+    improvement_review.add_argument("--command-id", required=True)
+    improvement_publish = improvement_commands.add_parser("publish", help="publish an independently accepted exact candidate")
+    improvement_publish.add_argument("workflow_id")
+    improvement_publish.add_argument("--delivery-id", required=True)
+    improvement_reconcile = improvement_commands.add_parser("reconcile", help="restore journaled originals after interrupted publication")
+    improvement_reconcile.add_argument("workflow_id")
+    improvement_cancel = improvement_commands.add_parser("cancel", help="persistently revoke future publication")
+    improvement_cancel.add_argument("workflow_id")
+    improvement_cancel.add_argument("--reason", required=True)
     interactive = commands.add_parser("shell", help="start an interactive command shell")
     dashboard = commands.add_parser("dashboard", help="start a local web dashboard (provider/workflow/task status)")
     dashboard.add_argument("--port", type=int, default=8765, help="HTTP port (default: 8765)")
@@ -170,19 +181,28 @@ def parser() -> argparse.ArgumentParser:
     daily_analyze = daily_commands.add_parser("analyze", help="rank recurring evidence-backed improvement opportunities")
     daily_analyze.add_argument("--window-hours", type=int, default=168)
     daily_analyze.add_argument("--max-candidates", type=int, default=5)
+    daily_analyze.add_argument("--max-records", type=int, default=1000)
+    daily_analyze.add_argument("--max-bytes", type=int, default=8 * 1024 * 1024)
+    daily_disposition = daily_commands.add_parser("disposition", help="record a scoped, evidence-cited candidate decision")
+    daily_disposition.add_argument("--signature", required=True)
+    daily_disposition.add_argument("--source-digest", required=True)
+    daily_disposition.add_argument("--status", choices=("resolved", "inapplicable", "failed_experiment", "deferred"), required=True)
+    daily_disposition.add_argument("--reason", required=True)
+    daily_disposition.add_argument("--evidence-id", action="append", required=True)
+    daily_disposition.add_argument("--command-id", required=True)
+    daily_disposition.add_argument("--cooldown-hours", type=int, default=24)
     for command in (validate, diagnostic, smoke, backup, create, listing, show, events, attempts, evidence, claims, reconcile,
                      workflow_create, workflow_list, workflow_show, workflow_status, workflow_events, workflow_step, workflow_reconcile,
                      delivery_create, delivery_list, delivery_step, delivery_reconcile, delivery_status, *delivery_reads,
                      project_commands.choices["status"], improvement_create, improvement_run, improvement_status, improvement_events,
-                     improvement_rollback, autonomy_plan, autonomy_run, autonomy_commands.choices["stop"],
-                     autonomy_commands.choices["clear-stop"], daily_analyze):
+                     improvement_rollback, improvement_review, improvement_publish, improvement_reconcile, improvement_cancel,
+                     autonomy_plan, autonomy_run, autonomy_commands.choices["stop"],
+                     autonomy_commands.choices["clear-stop"], daily_analyze, daily_disposition):
         command.add_argument("--json", action="store_true", default=argparse.SUPPRESS)
     return root
 
 
 def _run(args: argparse.Namespace) -> tuple[dict[str, Any], int]:
-    if args.command == "self-improve" and args.state_dir is None:
-        args.state_dir = str(Path(tempfile.gettempdir()) / "flawless-diamond-self-improve-state")
     paths = resolve_paths(args.project, args.config, args.state_dir)
     needs_config = args.command not in {"migrate", "backup"}
     config = load_config(paths.config) if needs_config else None
@@ -238,7 +258,11 @@ def _run(args: argparse.Namespace) -> tuple[dict[str, Any], int]:
     if args.command == "daily-improve":
         from .daily_improve import analyze_ledger
         if args.daily_command == "analyze":
-            return analyze_ledger(store, args.window_hours, args.max_candidates).to_dict(), 0
+            return analyze_ledger(store, args.window_hours, args.max_candidates, project=paths.project,
+                                  max_records=args.max_records, max_bytes=args.max_bytes).to_dict(), 0
+        from .improvement_evidence import record_disposition
+        return {"disposition": record_disposition(store, paths.project, args.signature, args.source_digest,
+                args.status, args.reason, tuple(args.evidence_id), args.command_id, args.cooldown_hours)}, 0
     if args.command == "smoke":
         from .live import smoke
         assert config is not None
@@ -266,83 +290,9 @@ def _run(args: argparse.Namespace) -> tuple[dict[str, Any], int]:
         assert config is not None
         return delivery_command(args, paths.config, config, store)
     if args.command == "self-improve":
-        from types import SimpleNamespace
-        from .self_improve import publish_verified_changes, validate_owned_paths
-        from .workflow_cli import workflow_command
-        from .workflow_store import WorkflowStore
+        from .self_improve_cli import self_improve_command
         assert config is not None
-        if args.improvement_command == "create":
-            validate_command_id(args.command_id)
-            validate_owned_paths(paths.project, tuple(args.owned_path))
-            checkpoint_workflow_id = args.workflow_id or uuid5(NAMESPACE_URL, f"diamond:workflow-create:{args.command_id}").hex
-            validate_task_id(checkpoint_workflow_id)
-            checkpoint = paths.state / "self-improve-checkpoints" / checkpoint_workflow_id
-            shadow = checkpoint / "workspace"
-            if checkpoint.exists():
-                existing = WorkflowStore(store).get(checkpoint_workflow_id)
-                if Path(existing.spec.workspace_root) != shadow.resolve():
-                    raise ValidationError("self-improvement checkpoint does not match its workflow")
-            else:
-                checkpoint.mkdir(parents=True)
-                for relative in args.owned_path:
-                    source = paths.project / relative
-                    target = checkpoint / relative
-                    target.parent.mkdir(parents=True, exist_ok=True)
-                    shutil.copy2(source, target)
-                shutil.copytree(paths.project / "src", shadow / "src")
-                if (paths.project / "tests").is_dir():
-                    shutil.copytree(paths.project / "tests", shadow / "tests")
-                for directory in ("config", "scripts"):
-                    source_directory = paths.project / directory
-                    if source_directory.is_dir():
-                        shutil.copytree(source_directory, shadow / directory)
-                (shadow / "tests").mkdir(exist_ok=True)
-                (shadow / "tests" / "__init__.py").write_text(
-                    "import sys\nfrom pathlib import Path\nsys.path.insert(0, str(Path(__file__).parents[1] / 'src'))\n",
-                    encoding="utf-8")
-            delegated = SimpleNamespace(
-                workflow_command="create", objective=args.objective, workspace=str(shadow),
-                owned_path=args.owned_path, test=args.test, correction_limit=None,
-                workflow_id=args.workflow_id, command_id=args.command_id)
-        elif args.improvement_command == "run":
-            delegated = SimpleNamespace(workflow_command="step", workflow_id=args.workflow_id,
-                                        expected_revision=args.expected_revision)
-        elif args.improvement_command in {"status", "events"}:
-            delegated = SimpleNamespace(workflow_command="show", workflow_id=args.workflow_id)
-            if args.improvement_command == "events":
-                delegated.workflow_command = "events"
-        else:
-            workflow = WorkflowStore(store).get(args.workflow_id)
-            validate_owned_paths(paths.project, workflow.spec.owned_paths)
-            checkpoint = paths.state / "self-improve-checkpoints" / args.workflow_id
-            if not checkpoint.is_dir():
-                raise ValidationError("self-improvement checkpoint is missing; refusing rollback")
-            for relative in workflow.spec.owned_paths:
-                source = checkpoint / relative
-                target = paths.project / relative
-                if not source.is_file():
-                    raise ValidationError(f"self-improvement checkpoint is incomplete: {relative}")
-            for relative in workflow.spec.owned_paths:
-                source = checkpoint / relative
-                target = paths.project / relative
-                shutil.copy2(source, target)
-            return {"workflow": workflow.to_dict(), "rolled_back": list(workflow.spec.owned_paths)}, 0
-        result = workflow_command(delegated, paths.config, config, store)
-        if args.improvement_command == "create":
-            workflow_id = result[0]["workflow"]["spec"]["workflow_id"]
-            result[0]["checkpoint"] = str(paths.state / "self-improve-checkpoints" / workflow_id)
-        elif args.improvement_command == "run":
-            workflow = WorkflowStore(store).get(args.workflow_id)
-            if workflow.status.value == "VERIFIED":
-                checkpoint = paths.state / "self-improve-checkpoints" / args.workflow_id
-                publish_verified_changes(paths.project, checkpoint, workflow.spec.owned_paths)
-                result[0]["applied_to_project"] = list(workflow.spec.owned_paths)
-        elif args.improvement_command in {"status", "events"}:
-            workflow = WorkflowStore(store).get(args.workflow_id)
-            checkpoint = paths.state / "self-improve-checkpoints" / args.workflow_id
-            result[0]["checkpoint"] = str(checkpoint)
-            result[0]["workspace"] = workflow.spec.workspace_root
-        return result
+        return self_improve_command(args, paths, config, store)
     if args.task_command == "create":
         assert config is not None
         command_id = args.command_id if args.command_id is not None else uuid4().hex

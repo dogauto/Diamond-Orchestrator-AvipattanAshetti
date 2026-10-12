@@ -199,7 +199,8 @@ def check_schema(connection: sqlite3.Connection, initialize: bool = False) -> No
     _check_layout(connection, SCHEMA_STATEMENTS)
     for table in ("events", "commands", "attempts", "attempt_commands", "attempt_evidence", "dispatch_claims",
                    "workflows", "workflow_events", "workflow_commands", "deliveries", "delivery_events", "delivery_commands",
-                   "improvement_checkpoints", "improvement_publications", "improvement_publication_events"):
+                   "improvement_checkpoints", "improvement_publications", "improvement_publication_events",
+                   "improvement_cancellations", "improvement_dispositions"):
         try:
             connection.execute(f"SELECT _rowid_ FROM {table} LIMIT 0")
         except sqlite3.OperationalError as exc:

@@ -36,6 +36,13 @@ def protect_workspace_writers(connection: sqlite3.Connection, root: Path) -> Non
 
 def protect_owned_paths(connection: sqlite3.Connection, paths: tuple[Path, ...],
                         task_id: str | None = None, attempt_id: str | None = None) -> None:
+    for row in connection.execute("SELECT p.project_root FROM improvement_publications p "
+            "JOIN improvement_publication_events e USING(workflow_id) "
+            "WHERE e.revision=(SELECT max(revision) FROM improvement_publication_events WHERE workflow_id=p.workflow_id) "
+            "AND e.status IN ('PUBLISHING','ROLLING_BACK','BLOCKED')"):
+        root = Path(row[0])
+        if any(path.is_relative_to(root) or root.is_relative_to(path) for path in paths):
+            raise ConflictError("workspace has an unresolved self-improvement publication; reconcile first")
     for row in connection.execute("SELECT snapshot_json FROM workflows WHERE status IN ('BUILDING','DEBUGGING','BLOCKED')"):
         snapshot = parse_canonical_json(row[0])
         spec = snapshot["spec"]

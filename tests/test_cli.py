@@ -264,7 +264,8 @@ class CliTests(ProjectCase):
 
         rollback = self.cli_process("--state-dir", str(state), "--json", "self-improve", "rollback", workflow_id)
         self.assertEqual(rollback.returncode, 0, rollback.stdout + rollback.stderr)
-        self.assertEqual(json.loads(rollback.stdout)["result"]["rolled_back"], ["src/diamond/workflow_cli.py"])
+        self.assertEqual(json.loads(rollback.stdout)["result"]["rolled_back"], [])
+        self.assertEqual(json.loads(rollback.stdout)["result"]["status"], "NOT_PUBLISHED")
 
     def test_self_improvement_cannot_own_controller_policy_files(self) -> None:
         shutil.copytree(ROOT / "src", self.project / "src", ignore=shutil.ignore_patterns("__pycache__", "*.pyc"))

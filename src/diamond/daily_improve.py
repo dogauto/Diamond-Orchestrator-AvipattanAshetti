@@ -8,17 +8,18 @@ or publish source changes.
 import json
 import re
 from dataclasses import dataclass, field
-from datetime import datetime, timedelta, timezone
+from pathlib import Path
 from typing import Any, Iterable
 
 from .store import EventStore
+from .evidence import digest_text
+from .validation import canonical_json
 from .validation import bounded_int, parse_canonical_json, utc_now
 
 
 _DIGEST = re.compile(r"\b[0-9a-f]{32,64}\b")
 _TIMESTAMP = re.compile(r"\b\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?Z\b")
-_DURATION = re.compile(r"\b\d+(?:\.\d+)?s\b")
-_ABSOLUTE_PATH = re.compile(r"(?:/private)?/(?:[^\s:'\"]+/)+[^\s:'\"]+")
+_DURATION = re.compile(r"\b\d+(?:\.\d+)?\s*(?:s|seconds)\b")
 
 
 @dataclass(frozen=True)
@@ -32,6 +33,11 @@ class EvidenceInput:
     provider: str
     role: str
     payload: dict[str, Any]
+    workspace: str = "UNKNOWN"
+    lineage: str | None = None
+    source_digest: str | None = None
+    cli_version: str | None = None
+    model: str | None = None
 
 
 @dataclass(frozen=True)
@@ -47,6 +53,8 @@ class FailureObservation:
     test_name: str | None = None
     relative_path: str | None = None
     candidate_digest: str | None = None
+    workspace: str = "UNKNOWN"
+    lineage: str | None = None
 
 
 @dataclass
@@ -58,10 +66,7 @@ class _CandidateGroup:
     observations: list[FailureObservation] = field(default_factory=list)
 
     def add(self, observation: FailureObservation) -> None:
-        incident = (observation.attempt_id, observation.candidate_digest,
-                    observation.test_name, observation.relative_path)
-        if any((item.attempt_id, item.candidate_digest, item.test_name, item.relative_path) == incident
-               for item in self.observations):
+        if observation in self.observations:
             return
         self.observations.append(observation)
         if observation.summary not in self.summaries:
@@ -74,7 +79,7 @@ class ImprovementCandidate:
     category: str
     severity: str
     score: int
-    confidence: str
+    evidence_support: str
     occurrences: int
     evidence_count: int
     objective: str
@@ -86,6 +91,10 @@ class ImprovementCandidate:
     evidence_ids: tuple[str, ...]
     first_seen: str
     last_seen: str
+    known_task_lineages: int
+    workspace: str
+    adjudication: str
+    resolution_evidence_ids: tuple[str, ...] = ()
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -93,7 +102,11 @@ class ImprovementCandidate:
             "category": self.category,
             "severity": self.severity,
             "score": self.score,
-            "confidence": self.confidence,
+            "evidence_support": self.evidence_support,
+            "known_task_lineages": self.known_task_lineages,
+            "workspace": self.workspace,
+            "adjudication": self.adjudication,
+            "resolution_evidence_ids": list(self.resolution_evidence_ids),
             "occurrences": self.occurrences,
             "evidence_count": self.evidence_count,
             "objective": self.objective,
@@ -116,6 +129,8 @@ class ImprovementAnalysis:
     evidence_records: int
     failure_observations: int
     candidates: tuple[ImprovementCandidate, ...]
+    historical_candidates: tuple[ImprovementCandidate, ...] = ()
+    read_window: dict[str, Any] = field(default_factory=dict)
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -125,6 +140,12 @@ class ImprovementAnalysis:
             "evidence_records": self.evidence_records,
             "failure_observations": self.failure_observations,
             "candidates": [candidate.to_dict() for candidate in self.candidates],
+            "historical_candidates": [candidate.to_dict() for candidate in self.historical_candidates],
+            "read_window": self.read_window,
+            "outcome": "review_candidates" if self.candidates else "no_actionable_evidence",
+            "limitations": ["Scores are heuristic prioritization, not calibrated confidence or proof of a defect.",
+                            "Known task lineages count recorded workflow families, not independent statistical samples.",
+                            "Later passing tests are observations, not proof against delayed regressions."],
             "execution": {
                 "provider_launch": False,
                 "source_publication": False,
@@ -134,7 +155,6 @@ class ImprovementAnalysis:
 
 
 def _normalize(value: str) -> str:
-    value = _ABSOLUTE_PATH.sub("<path>", value)
     value = _DIGEST.sub("<digest>", value)
     value = _TIMESTAMP.sub("<timestamp>", value)
     value = _DURATION.sub("<duration>", value)
@@ -178,7 +198,7 @@ def _observations(item: EvidenceInput) -> tuple[FailureObservation, ...]:
                     continue
                 description = str(finding.get("description") or "blocking delivery finding")
                 observations.append(FailureObservation(
-                    "delivery_finding", "critical", _normalize(description), item.evidence_id,
+                    "delivery_finding", "medium", _normalize(description), item.evidence_id,
                     item.attempt_id, item.provider, item.role, item.created_at,
                     relative_path=finding.get("relative_path"), candidate_digest=payload.get("candidate_digest")))
         if not observations:
@@ -194,17 +214,17 @@ def _observations(item: EvidenceInput) -> tuple[FailureObservation, ...]:
             observations.append(FailureObservation(
                 "provider_failure", "high", _normalize(str(detail or "provider execution failed")),
                 item.evidence_id, item.attempt_id, item.provider, item.role, item.created_at))
-    return tuple(observations)
+    from dataclasses import replace
+    return tuple(replace(observation, workspace=item.workspace, lineage=item.lineage) for observation in observations)
 
 
-def _candidate(group: _CandidateGroup) -> ImprovementCandidate:
+def _candidate(group: _CandidateGroup, passing: dict) -> ImprovementCandidate:
     observations = group.observations
     attempts = {item.attempt_id for item in observations}
-    candidates = {item.candidate_digest for item in observations if item.candidate_digest}
+    lineages = {item.lineage for item in observations if item.lineage is not None}
     score = {"critical": 35, "high": 25, "medium": 15}.get(group.severity, 10)
-    score += min(30, len(attempts) * 10)
-    score += min(20, max(0, len(candidates) - 1) * 10)
-    confidence = "high" if len(attempts) >= 2 and len(candidates) >= 2 else "medium" if len(attempts) >= 2 else "low"
+    score += min(30, len(lineages) * 10)
+    support = "unknown_lineage" if not lineages else "single_lineage" if len(lineages) == 1 else "multiple_lineages"
     tests = tuple(sorted({item.test_name for item in observations if item.test_name}))
     paths = tuple(sorted({item.relative_path for item in observations if item.relative_path}))
     providers = tuple(sorted({item.provider for item in observations}))
@@ -216,12 +236,26 @@ def _candidate(group: _CandidateGroup) -> ImprovementCandidate:
     recommendation = ("Reproduce the failure against the exact candidate before changing source; define a regression "
                       "test and compare the baseline with the proposed fix."
                       if group.category != "delivery_finding" else
-                      "Reconcile candidate identity and evidence before any source change; rerun independent delivery gates.")
+                       "Reconcile candidate identity and evidence before any source change; rerun independent delivery gates.")
+    if group.category == "provider_failure":
+        recommendation = "Investigate provider availability, authentication, quota and execution evidence before proposing a source change."
+    resolutions = []
+    unresolved = False
+    for item in observations:
+        later = passing.get((item.workspace, item.lineage, item.test_name)) if item.lineage and item.test_name else None
+        if later and later.created_at > item.created_at:
+            resolutions.append(later.evidence_id)
+        else:
+            unresolved = True
+    adjudication = "unadjudicated_claim" if group.category == "delivery_finding" else "observed_failure_requires_reproduction"
+    if not unresolved:
+        adjudication = "later_pass_observed"
     return ImprovementCandidate(
-        group.signature, group.category, group.severity, min(100, score), confidence,
+        group.signature, group.category, group.severity, min(100, score), support,
         len(attempts), len({item.evidence_id for item in observations}), objective,
         recommendation, providers, roles, tests, paths,
-        tuple(sorted({item.evidence_id for item in observations})), first_seen, last_seen)
+        tuple(sorted({item.evidence_id for item in observations})), first_seen, last_seen,
+        len(lineages), observations[0].workspace, adjudication, tuple(sorted(set(resolutions))))
 
 
 def analyze_evidence(records: Iterable[EvidenceInput], window_hours: int = 168,
@@ -231,38 +265,33 @@ def analyze_evidence(records: Iterable[EvidenceInput], window_hours: int = 168,
     groups: dict[str, _CandidateGroup] = {}
     evidence_records = 0
     failure_count = 0
+    passing = {}
     for record in records:
         evidence_records += 1
+        if record.kind == "required_tests" and record.payload.get("passed") is True:
+            for test in record.payload.get("tests", []):
+                if isinstance(test, dict) and test.get("passed") is True and isinstance(test.get("name"), str):
+                    key = (record.workspace, record.lineage, test["name"])
+                    if key not in passing or passing[key].created_at < record.created_at:
+                        passing[key] = record
         for observation in _observations(record):
             failure_count += 1
-            signature = f"{observation.category}|{observation.test_name or observation.relative_path or ''}|{observation.summary}"
+            signature = digest_text(canonical_json([observation.workspace, observation.category,
+                                   observation.test_name, observation.relative_path, observation.summary]))
             group = groups.setdefault(signature, _CandidateGroup(
                 observation.category, observation.severity, signature))
             group.add(observation)
-    candidates = sorted((_candidate(group) for group in groups.values()),
-                        key=lambda item: (-item.score, -item.occurrences, item.signature))
-    return ImprovementAnalysis(1, utc_now(), window_hours, evidence_records, failure_count,
-                                tuple(candidates[:max_candidates]))
+    candidates = sorted((_candidate(group, passing) for group in groups.values()),
+                         key=lambda item: (-item.score, -item.occurrences, item.signature))
+    active = [item for item in candidates if item.adjudication != "later_pass_observed"]
+    historical = [item for item in candidates if item.adjudication == "later_pass_observed"]
+    return ImprovementAnalysis(2, utc_now(), window_hours, evidence_records, failure_count,
+                                tuple(active[:max_candidates]), tuple(historical[:max_candidates]))
 
 
 def analyze_ledger(ledger: EventStore, window_hours: int = 168,
-                   max_candidates: int = 5) -> ImprovementAnalysis:
-    bounded_int(window_hours, "daily improvement window hours", 1, 24 * 365)
-    bounded_int(max_candidates, "daily improvement candidate limit", 1, 100)
-    if not ledger._database_present():
-        return analyze_evidence((), window_hours, max_candidates)
-    cutoff = datetime.now(timezone.utc) - timedelta(hours=window_hours)
-    records: list[EvidenceInput] = []
-    with ledger._connection(write=False) as connection:
-        rows = connection.execute(
-            "SELECT e.evidence_id,e.attempt_id,e.kind,e.created_at,e.payload_json,"
-            "a.provider,a.role FROM attempt_evidence e JOIN attempts a ON a.attempt_id=e.attempt_id "
-            "WHERE e.created_at >= ? ORDER BY e.created_at,e.evidence_id",
-            (cutoff.isoformat(timespec="microseconds").replace("+00:00", "Z"),)).fetchall()
-        for row in rows:
-            payload = parse_canonical_json(row["payload_json"])
-            if not isinstance(payload, dict):
-                raise ValueError("persisted evidence payload must be an object")
-            records.append(EvidenceInput(row["evidence_id"], row["attempt_id"], row["kind"],
-                                         row["created_at"], row["provider"], row["role"], payload))
-    return analyze_evidence(records, window_hours, max_candidates)
+                   max_candidates: int = 5, *, project: Path | None = None,
+                   max_records: int = 1000, max_bytes: int = 8 * 1024 * 1024) -> ImprovementAnalysis:
+    from .improvement_evidence import analyze_snapshot
+    return analyze_snapshot(ledger, window_hours, max_candidates, project=project,
+                            max_records=max_records, max_bytes=max_bytes)

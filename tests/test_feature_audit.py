@@ -6,7 +6,7 @@ from unittest.mock import patch
 
 from diamond.chat import _extract_text, _fetch_sse
 from diamond.cli import parser
-from diamond.errors import ConflictError, ValidationError
+from diamond.errors import ConflictError, ExecutionGuardError, ValidationError
 from diamond.mcp_server import serve_stdio
 from diamond.paths import resolve_paths
 from diamond.self_improve import validate_owned_paths
@@ -81,7 +81,7 @@ class FeatureAuditTests(ProjectCase):
         result = json.loads(created.stdout)["result"]
         checkpoint = Path(result["checkpoint"])
         source.write_text("human_change = True\n")
-        with self.assertRaises(ConflictError):
+        with self.assertRaises(ExecutionGuardError):
             publish_verified_changes(self.project, checkpoint, ("src/diamond/feature.py",))
         self.assertEqual(source.read_text(), "human_change = True\n")
 

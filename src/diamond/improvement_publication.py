@@ -97,6 +97,7 @@ def publish(project, checkpoint, ledger, workflow_id, delivery_id, config_digest
     store = ImprovementStore(ledger)
     with project_lock(project):
         saved, workflow = _identity(project, checkpoint, ledger, workflow_id)
+        store.require_active(workflow_id)
         previous = store.publication(workflow_id)
         if previous is not None:
             if previous["delivery_id"] != delivery_id or previous["status"] != "PUBLISHED":
@@ -149,6 +150,7 @@ def publish(project, checkpoint, ledger, workflow_id, delivery_id, config_digest
         # Intent commits before the first replace; any interruption retains the reservation.
         expected = parse_canonical_json(saved["base_manifest_json"])
         for item in files:
+            store.require_active(workflow_id)
             if source_manifest(project) != canonical_json(expected):
                 raise ConflictError("live inputs changed during publication; reconcile the retained intent")
             if deliveries.certificate(delivery_id, config_digest) != certificate:
@@ -158,6 +160,7 @@ def publish(project, checkpoint, ledger, workflow_id, delivery_id, config_digest
             expected[item["path"]] = {"kind": "file", **{key: item["candidate"][key] for key in ("sha256", "size_bytes", "mode")}}
         if source_manifest(project) != canonical_json(expected):
             raise ConflictError("source changed before publication receipt; reconciliation required")
+        store.require_active(workflow_id)
         store.transition(workflow_id, "PUBLISHED")
         return store.publication(workflow_id)
 

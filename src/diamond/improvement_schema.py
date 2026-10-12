@@ -1,4 +1,7 @@
 STATEMENTS = (
+    """CREATE TABLE improvement_cancellations (
+        workflow_id TEXT PRIMARY KEY REFERENCES improvement_checkpoints(workflow_id),
+        timestamp TEXT NOT NULL, reason TEXT NOT NULL) WITHOUT ROWID""",
     """CREATE TABLE improvement_checkpoints (
         workflow_id TEXT PRIMARY KEY REFERENCES workflows(workflow_id), project_root TEXT NOT NULL,
         base_manifest_json TEXT NOT NULL, config_digest TEXT NOT NULL) WITHOUT ROWID""",
@@ -14,9 +17,21 @@ STATEMENTS = (
         PRIMARY KEY(workflow_id,revision)) WITHOUT ROWID""",
     """CREATE INDEX evidence_window ON attempt_evidence(created_at,evidence_id)""",
     """CREATE INDEX evidence_attempt ON attempt_evidence(attempt_id,created_at,evidence_id)""",
+    """CREATE INDEX workflow_attempt_lineage ON workflow_events(json_extract(payload_json,'$.attempt_id'))
+        WHERE event_type='STARTED'""",
+    """CREATE INDEX delivery_attempt_lineage ON delivery_events(json_extract(payload_json,'$.attempt_id'))
+        WHERE event_type='STARTED'""",
+    """CREATE TABLE improvement_dispositions (
+        command_id TEXT PRIMARY KEY, project_root TEXT NOT NULL, source_digest TEXT NOT NULL,
+        signature TEXT NOT NULL, status TEXT NOT NULL CHECK(status IN ('resolved','inapplicable','failed_experiment','deferred')),
+        reason TEXT NOT NULL, evidence_ids_json TEXT NOT NULL, created_at TEXT NOT NULL,
+        expires_at TEXT NOT NULL) WITHOUT ROWID""",
+    """CREATE INDEX disposition_scope ON improvement_dispositions(project_root,source_digest,signature,created_at)""",
 ) + tuple(
     statement
     for table, identity in (
+        ("improvement_cancellations", "workflow_id=NEW.workflow_id"),
+        ("improvement_dispositions", "command_id=NEW.command_id"),
         ("improvement_checkpoints", "workflow_id=NEW.workflow_id"),
         ("improvement_publications", "workflow_id=NEW.workflow_id"),
         ("improvement_publication_events", "workflow_id=NEW.workflow_id AND revision=NEW.revision"),

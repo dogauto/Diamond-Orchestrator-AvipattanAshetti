@@ -38,6 +38,7 @@ PROTECTED_PATHS = (
     Path("src/diamond/daily_improve.py"),
     Path("src/diamond/improvement_schema.py"),
     Path("src/diamond/improvement_store.py"),
+    Path("src/diamond/improvement_evidence.py"),
     Path("src/diamond/improvement_publication.py"),
     Path("src/diamond/self_improve_cli.py"),
     Path("src/diamond/agent_profiles.py"),
