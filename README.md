@@ -59,8 +59,10 @@ It does that by:
   operations console.
 
 The repository also contains the planning and verification record for a future
-dynamic-agent pilot. That pilot remains planned. The current implementation is
-the repaired fixed-routing foundation that the pilot must build on.
+dynamic-agent pilot. The offline M2 profile and accounting foundation is now
+implemented, while live profile dispatch remains gated. The implementation
+keeps the repaired fixed-routing foundation as the incumbent that the pilot
+must test against.
 
 ## The workflow
 
@@ -233,6 +235,45 @@ Dispositions are immutable, scoped to the current source digest, and
 idempotent by command ID. The supported statuses are `resolved`,
 `inapplicable`, `failed_experiment`, and `deferred`.
 
+## Reviewed profile pilot infrastructure
+
+M2 adds two digest-pinned, project-authored instruction profiles for the fixed
+Claude Builder route: one for Python parser work and one for SQLite transaction
+work. A profile can narrow the guidance for one existing worker. It cannot add
+tools, change ownership, edit trusted tests, create workers, or change the
+response contract.
+
+Preview a profile without launching a provider:
+
+```sh
+./scripts/diamond.sh --json profile preview \
+  --objective "Inspect parser boundary handling" \
+  --workspace /absolute/path/to/bounded-workspace \
+  --tag parser --tag python
+```
+
+The preview retains the profile digest, catalog digest, selection reasons,
+effective prompt digest, packet digest, and execution limits. A matching
+unstarted workflow can supply the accepted source, tests, and skills instead of
+an objective-only preview. Ambiguous tags and source or catalog drift fail
+closed. Tasks without a matching profile preserve the schema-1 packet and
+prompt bytes.
+
+Before a live comparison, create an operator-owned trial design:
+
+```sh
+./scripts/diamond.sh --json profile trial-template
+./scripts/diamond.sh --json profile trial-validate \
+  --file /absolute/path/to/trial-design.json
+```
+
+The design must name the workload, assignment and holdout method, blinded
+acceptance, evaluator version, provider eligibility, budgets, maturation period,
+stopping rule, economic hurdle, and owners. Registration, assignment,
+cancellation, and outcome commands provide durable accounting only. They never
+launch a provider. Live dispatch remains blocked until controller-derived
+provider result identity and usage accounting are connected.
+
 ## Run it locally
 
 ### Requirements
@@ -349,13 +390,14 @@ The latest M0/M1 checkpoint records:
 | Area | Status |
 | --- | --- |
 | Controller and macOS console | Verified locally |
-| Python regression suite | 330 tests passed |
-| Python source compilation | 90 files compiled in memory |
+| Python regression suite | 355 tests passed |
+| Python source compilation | 97 files compiled in memory |
 | Native console build | Passed with Swift Package Manager |
 | Self-improvement publication | Independent review, cancellation, rollback, and reconciliation implemented |
 | Daily improvement | Scoped, bounded, evidence-cited analysis implemented |
 | Live provider authentication | Partial and environment-dependent |
-| Dynamic profile pilot and adaptive routing | Planned for later milestones |
+| M2 reviewed profiles and dry-run accounting | Implemented; live dispatch remains blocked |
+| Adaptive routing | Planned for later milestones |
 | Production certification | Not complete |
 
 See the [full status record](docs/progress/STATUS.md) and the
@@ -382,7 +424,7 @@ tests/       Unit, black-box, integration, recovery, and stress tests
 3. [Roles and skills](docs/architecture/ROLES_AND_SKILLS.md) explains packet
    binding and advisory skill provenance.
 4. [Dynamic agents plan](docs/plan/DYNAMIC_AGENTS_PLAN.md) separates the
-   verified foundation from the planned profile pilot.
+   verified offline profile foundation from the planned live pilot.
 5. [Phase gates](docs/verification/PHASE_GATES.md) explains what must pass before
    the next milestone can begin.
 6. [Documentation hub](docs/README.md) contains the complete internal index.

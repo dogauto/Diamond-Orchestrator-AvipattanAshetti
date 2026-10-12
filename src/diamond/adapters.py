@@ -1,3 +1,4 @@
+import hashlib
 from dataclasses import dataclass
 from enum import Enum
 from pathlib import Path
@@ -29,6 +30,8 @@ class Invocation:
     permission_mode: PermissionMode = PermissionMode.DEFAULT
     json_schema: str | None = None
     json_schema_path: str | None = None
+    prompt_digest: str | None = None
+    prompt_text: str | None = None
 
     def __post_init__(self) -> None:
         if not isinstance(self.provider, Provider) or type(self.argv) is not tuple or not self.argv:
@@ -53,6 +56,13 @@ class Invocation:
             text(self.json_schema_path, "invocation JSON schema path", 4096)
             if not Path(self.json_schema_path).is_absolute():
                 raise ValidationError("invocation JSON schema path must be absolute")
+        if self.prompt_digest is not None and (type(self.prompt_digest) is not str or len(self.prompt_digest) != 64
+                or any(char not in "0123456789abcdef" for char in self.prompt_digest)):
+            raise ValidationError("invocation prompt digest must be a lowercase SHA-256 digest")
+        if self.prompt_text is not None:
+            text(self.prompt_text, "invocation prompt", 1_000_000)
+            if self.prompt_digest != hashlib.sha256(self.prompt_text.encode("utf-8")).hexdigest():
+                raise ValidationError("invocation prompt digest does not match prompt text")
         if self.json_schema is not None and self.json_schema_path is not None:
             raise ValidationError("invocation JSON schema must use either inline or file-backed form")
         if self.provider is Provider.CODEX and self.json_schema is not None:
@@ -102,7 +112,8 @@ def build_invocation(provider: Provider, executable: str, prompt: str, *,
         if requested_model:
             argv.extend(("--model", requested_model))
         return Invocation(provider, tuple(argv), OutputMode.JSON, requested_model,
-                          permission_mode is PermissionMode.PLAN, permission_mode)
+                          permission_mode is PermissionMode.PLAN, permission_mode,
+                          prompt_digest=hashlib.sha256(prompt.encode()).hexdigest(), prompt_text=prompt)
     if provider is Provider.ANTIGRAVITY:
         output_mode = OutputMode.STREAM_JSON if stream else OutputMode.JSON
         argv = [executable, "-p", prompt, "--output-format", output_mode.value,
@@ -112,7 +123,8 @@ def build_invocation(provider: Provider, executable: str, prompt: str, *,
         if requested_model:
             argv.extend(("--model", requested_model))
         return Invocation(provider, tuple(argv), output_mode, requested_model,
-                          permission_mode is PermissionMode.PLAN, permission_mode, json_schema)
+                          permission_mode is PermissionMode.PLAN, permission_mode, json_schema,
+                           prompt_digest=hashlib.sha256(prompt.encode()).hexdigest(), prompt_text=prompt)
     if provider is Provider.CODEX:
         sandbox = "read-only" if permission_mode is PermissionMode.PLAN else "workspace-write"
         argv = [executable, "exec", "--json", "--ignore-user-config", "--ignore-rules", "--sandbox", sandbox,
@@ -124,14 +136,14 @@ def build_invocation(provider: Provider, executable: str, prompt: str, *,
         argv.append(prompt)
         return Invocation(provider, tuple(argv), OutputMode.JSON, requested_model,
                           permission_mode is PermissionMode.PLAN, permission_mode,
-                          json_schema_path=json_schema_path)
+                           json_schema_path=json_schema_path, prompt_digest=hashlib.sha256(prompt.encode()).hexdigest(), prompt_text=prompt)
     if provider is Provider.OMNIRUSH:
         argv = [executable, "-p", prompt]
         if requested_model:
             argv.extend(("--model", requested_model))
         return Invocation(provider, tuple(argv), OutputMode.TEXT, requested_model,
                           permission_mode is PermissionMode.PLAN and sandbox_executable() is not None,
-                          permission_mode)
+                          permission_mode, prompt_digest=hashlib.sha256(prompt.encode()).hexdigest(), prompt_text=prompt)
     if provider is Provider.COPILOT:
         argv = [executable, "-p", prompt, "--output-format", "json", "--no-ask-user"]
         if permission_mode is PermissionMode.PLAN:
@@ -139,7 +151,8 @@ def build_invocation(provider: Provider, executable: str, prompt: str, *,
         if requested_model:
             argv.extend(("--model", requested_model))
         return Invocation(provider, tuple(argv), OutputMode.JSON, requested_model,
-                          permission_mode is PermissionMode.PLAN, permission_mode)
+                          permission_mode is PermissionMode.PLAN, permission_mode,
+                          prompt_digest=hashlib.sha256(prompt.encode()).hexdigest(), prompt_text=prompt)
     argv = [executable, "-p", "--output-format", "json", "--no-session-persistence",
             "--permission-mode", "plan" if permission_mode is PermissionMode.PLAN else "dontAsk"]
     if provider_tools is not None:
@@ -151,7 +164,8 @@ def build_invocation(provider: Provider, executable: str, prompt: str, *,
         argv.extend(("--model", requested_model))
     argv.extend(("--", prompt))
     return Invocation(provider, tuple(argv), OutputMode.JSON, requested_model,
-                      permission_mode is PermissionMode.PLAN, permission_mode, json_schema)
+                      permission_mode is PermissionMode.PLAN, permission_mode, json_schema,
+                       prompt_digest=hashlib.sha256(prompt.encode()).hexdigest(), prompt_text=prompt)
 
 
 def validate_working_directory(path: Path) -> Path:

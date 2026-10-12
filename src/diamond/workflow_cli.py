@@ -54,6 +54,15 @@ def workflow_command(args: argparse.Namespace, config_path: Path, config: Diamon
     workflows = WorkflowStore(ledger)
     config_digest = hashlib.sha256(config_path.read_bytes()).hexdigest()
     if args.workflow_command == "create":
+        if bool(args.task_tag) != bool(args.trial_opt_in):
+            raise ValidationError("workflow trial opt-in requires --trial-opt-in and at least one --task-tag together")
+        if args.trial_opt_in:
+            from .trial_store import TrialStore
+            trial = TrialStore(ledger).get(args.trial_opt_in)
+            if TrialStore(ledger).status(args.trial_opt_in)["status"] != "REGISTERED":
+                raise ValidationError("workflow can only opt into an active registered trial")
+            if set(trial.profile_ids) != {"builder-python-parser", "builder-sqlite-transaction"}:
+                raise ValidationError("workflow opt-in trial does not match the current M2 profile catalog")
         identifier = args.workflow_id or uuid5(NAMESPACE_URL, f"diamond:workflow-create:{args.command_id}").hex
         try:
             root = Path(args.workspace).expanduser().resolve(strict=True)
@@ -65,7 +74,9 @@ def workflow_command(args: argparse.Namespace, config_path: Path, config: Diamon
         spec = WorkflowSpec(identifier, args.objective, str(root), tuple(args.owned_path), tests,
             config.resolve_provider(Role.BUILDER), config.resolve_provider(Role.DEBUGGER), config_digest,
             workspace_manifest(root), correction_round_limit=args.correction_limit if args.correction_limit is not None else config.controller.correction_round_limit,
-            timeout_seconds=min(config.controller.task_timeout_seconds, 900), max_workers=config.controller.max_workers)
+            timeout_seconds=min(config.controller.task_timeout_seconds, 900), max_workers=config.controller.max_workers,
+            schema_version=2 if args.trial_opt_in else 1, task_tags=tuple(args.task_tag),
+            trial_opt_in=args.trial_opt_in)
         protect_inputs(spec, config_path, config)
         return {"workflow": workflows.create(spec, args.command_id).to_dict()}, 0
     if args.workflow_command == "list":

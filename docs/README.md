@@ -213,6 +213,82 @@ scoped to the current source digest. Cooldown expiry or source changes permit
 requalification. Discovery and dispositions do not launch providers or publish
 source; automated Researcher/Planner orchestration remains a later milestone.
 
+## M2 profile preview
+
+Two digest-pinned instruction profiles are available for the fixed Claude
+Builder route: Python parsing and SQLite transactions. These are project-
+authored, coding-agent contract-reviewed instructions with **unevaluated**
+performance. They specialize one worker; they grant no additional tools,
+ownership, test authority, or workers.
+
+Preview against an existing, unstarted workflow:
+
+```sh
+./scripts/diamond.sh --json profile preview \
+  --workflow-id WORKFLOW_ID --tag parser --tag python
+```
+
+This reuses the workflow's accepted source, required tests, pinned skills,
+fixed provider and limits without changing its revision. Use `--tag sqlite
+--tag transaction` for the other profile. Contradictory/ambiguous selections
+are rejected. No match preserves the exact legacy packet and prompt.
+
+For an objective-only preview, use a bounded workspace:
+
+```sh
+./scripts/diamond.sh --json profile preview \
+  --objective "Inspect parser boundary handling" \
+  --workspace /absolute/path/to/bounded-workspace --tag parser --tag python
+```
+
+The result includes selection/rejection reasons, catalog/profile digests,
+effective prompt bytes and digest, packet digest, and limits. The objective-
+only form has no owned-source context. Both forms are read-only and make no
+provider calls. Profiled packets use schema 2; schema-1 bytes and historical
+dispatch hashes remain unchanged. Catalog or source drift invalidates a
+compiled profile, and authorization compares actual provider arguments with
+the bound prompt/tool contract.
+
+Prepare the operator-owned trial design:
+
+```sh
+./scripts/diamond.sh --json profile trial-template
+./scripts/diamond.sh --json profile trial-validate --file /absolute/path/to/trial-design.json
+```
+
+Copy the template's `result.design` object into your JSON file and fill its
+empty/null values. It includes the hypothesis, real workload, lineage split,
+holdout/assignment procedure, blinded acceptance, evaluator identity,
+all-assignment/unknown-outcome accounting, privacy/provider eligibility,
+assignment/call/time budgets, maturation period, stopping rules, economic
+hurdle, and owners. The catalog digest pins the two interventions.
+
+`structurally_valid: true` means the required fields and identity checks pass;
+it does not validate the study's quality or authorize execution. Live profile
+dispatch remains blocked until the approved design is registered and provider
+result identity/accounting is connected. The persisted dry-run surfaces are:
+
+```sh
+./scripts/diamond.sh --json profile trial-register \
+  --file /absolute/path/to/trial-design.json --command-id trial-register-1
+./scripts/diamond.sh --json workflow create \
+  --objective "Bounded parser task" --workspace /absolute/path/to/workspace \
+  --owned-path src/parser.py --test '{"name":"smoke","argv":["/usr/bin/python3","-c","assert True"],"timeout_seconds":30,"output_limit":4096}' \
+  --task-tag parser --task-tag python --trial-opt-in TRIAL_ID \
+  --command-id workflow-trial-1
+./scripts/diamond.sh --json profile trial-assign TRIAL_ID \
+  --workflow-id WORKFLOW_ID --lineage-key LINEAGE-1 --arm builder-python-parser \
+  --reserved-provider-calls 2 --reserved-wall-clock-seconds 300 \
+  --command-id assignment-1
+./scripts/diamond.sh --json profile trial-show TRIAL_ID
+```
+
+Registration, assignment, cancellation and outcome commands are accounting-only
+and always report provider launch as false. The current outcome command is a
+local fixture/operator accounting surface; live authorization must derive usage,
+cost, elapsed time and unknown status from controller evidence. No live trial
+has run.
+
 ## Foundation launch instructions
 
 The commands below operate the verified foundation slice. They do not launch AI

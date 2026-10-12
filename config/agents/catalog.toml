@@ -1,0 +1,31 @@
+schema_version = 1
+
+[[profiles]]
+id = "builder-python-parser"
+version = "1.0.0"
+role = "builder"
+provider = "claude"
+required_tags = ["parser", "python"]
+conflicts_with = ["sqlite", "transaction"]
+source = "profiles/builder-python-parser.md"
+sha256 = "670524ba41629ad70ec67baa7ac1a72ec7d0520b4bf4bd4b4061130e08eb37e5"
+review_status = "contract-reviewed"
+reviewed_by = "Coding agent: role-contract inspection; no human approval claimed"
+provenance = "Project-authored bounded instruction profile"
+license = "Project terms"
+evaluation_status = "unevaluated"
+
+[[profiles]]
+id = "builder-sqlite-transaction"
+version = "1.0.0"
+role = "builder"
+provider = "claude"
+required_tags = ["sqlite", "transaction"]
+conflicts_with = ["parser", "python"]
+source = "profiles/builder-sqlite-transaction.md"
+sha256 = "bd30d1d7bf8c1ec267bad22a86f632c3465df8cb8ead297d22f1b71fbf05eec1"
+review_status = "contract-reviewed"
+reviewed_by = "Coding agent: role-contract inspection; no human approval claimed"
+provenance = "Project-authored bounded instruction profile"
+license = "Project terms"
+evaluation_status = "unevaluated"

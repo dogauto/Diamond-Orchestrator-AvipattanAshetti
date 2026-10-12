@@ -54,7 +54,7 @@ def _create(args, paths, config, ledger):
                 raise ConflictError("inputs changed during checkpoint capture; use a new command ID")
         delegated = SimpleNamespace(workflow_command="create", objective=args.objective, workspace=str(shadow),
             owned_path=args.owned_path, test=args.test, correction_limit=None, workflow_id=args.workflow_id,
-            command_id=args.command_id)
+            task_tag=[], trial_opt_in=None, command_id=args.command_id)
         result, code = workflow_command(delegated, paths.config, config, ledger)
         if not existing:
             improvements.register(identifier, paths.project, before, result["workflow"]["spec"]["config_digest"])

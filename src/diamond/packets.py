@@ -120,6 +120,13 @@ class TaskPacket:
     schema_version: int = 1
     task_revision: int = 1
     provider_tools: tuple[str, ...] | None = None
+    task_tags: tuple[str, ...] = ()
+    profile_id: str | None = None
+    profile_version: str | None = None
+    profile_digest: str | None = None
+    selection_digest: str | None = None
+    effective_prompt_digest: str | None = None
+    profile_binding_json: str | None = None
 
     def __post_init__(self) -> None:
         task_id(self.task_id)
@@ -129,7 +136,7 @@ class TaskPacket:
             raise ValidationError("packet role/provider must be enum values")
         if self.requested_model is not None:
             text(self.requested_model, "requested model", 256)
-        bounded_int(self.schema_version, "packet schema_version", 1, 1)
+        bounded_int(self.schema_version, "packet schema_version", 1, 2)
         bounded_int(self.task_revision, "task revision", 1, 2**63 - 1)
         bounded_int(self.plan_revision, "plan revision", 1, 2**63 - 1)
         for value, name in ((self.plan_digest, "plan digest"), (self.base_digest, "base digest"),
@@ -159,6 +166,34 @@ class TaskPacket:
                 raise ValidationError("provider_tools must be an immutable tuple or None")
             for tool in self.provider_tools:
                 text(tool, "provider tool", 128)
+        if type(self.task_tags) is not tuple or len(self.task_tags) > 64:
+            raise ValidationError("task_tags must be an immutable tuple of at most 64 values")
+        for tag in self.task_tags:
+            if type(tag) is not str or not re.fullmatch(r"[a-z][a-z0-9_-]{0,63}", tag):
+                raise ValidationError("task_tags must contain canonical lowercase names")
+        if tuple(sorted(set(self.task_tags))) != self.task_tags:
+            raise ValidationError("task_tags must be sorted and distinct")
+        if self.schema_version == 1 and (self.task_tags or any(value is not None for value in (
+                self.profile_id, self.profile_version, self.profile_digest, self.selection_digest,
+                self.effective_prompt_digest, self.profile_binding_json))):
+            raise ValidationError("profile identity requires packet schema version 2")
+        identities = (self.profile_digest, self.selection_digest, self.effective_prompt_digest)
+        for value, name in zip(identities, ("profile digest", "profile selection digest", "effective prompt digest")):
+            if value is not None:
+                _digest(value, name)
+        if self.profile_id is None:
+            if self.profile_version is not None or self.profile_digest is not None:
+                raise ValidationError("profile version/digest require a profile ID")
+        else:
+            text(self.profile_id, "profile ID", 128)
+            text(self.profile_version, "profile version", 64)
+            if self.profile_digest is None or self.selection_digest is None or self.effective_prompt_digest is None:
+                raise ValidationError("selected profile requires complete identity binding")
+        if self.schema_version == 2:
+            if self.role is not Role.BUILDER or self.provider is not Provider.CLAUDE or self.provider_tools != ():
+                raise ValidationError("profile packet requires the response-only Claude Builder contract")
+            from .agent_compiler import verify_packet_binding
+            verify_packet_binding(self, current=False)
 
     @classmethod
     def from_task_spec(cls, spec: TaskSpec, attempt_id: str, workspace_root: Path,
@@ -218,6 +253,9 @@ class TaskPacket:
 
     def verify(self, registry: SkillRegistry, available_capabilities: Iterable[str]) -> None:
         self.verify_workspace()
+        if self.schema_version == 2:
+            from .agent_compiler import verify_packet_binding
+            verify_packet_binding(self)
         current = registry.resolve((skill.name for skill in self.skills), self.role,
                                    available_capabilities)
         if current != self.skills:
@@ -287,6 +325,19 @@ class TaskPacket:
             raise ValidationError("invocation executable is not allowed by the task packet")
         if invocation.requested_model != self.requested_model:
             raise ValidationError("invocation requested model does not match the task packet")
+        if self.schema_version == 2 and (invocation.prompt_text is None or
+                invocation.prompt_digest != self.effective_prompt_digest or
+                hashlib.sha256(invocation.prompt_text.encode("utf-8")).hexdigest() != self.effective_prompt_digest):
+            raise ValidationError("invocation prompt does not match the reviewed profile binding")
+        if self.schema_version == 2:
+            from .adapters import build_invocation
+            from .agent_compiler import verify_packet_binding
+            verify_packet_binding(self)
+            expected = build_invocation(self.provider, invocation.argv[0], invocation.prompt_text,
+                requested_model=self.requested_model, permission_mode=invocation.permission_mode,
+                json_schema=invocation.json_schema, provider_tools=self.provider_tools)
+            if expected != invocation:
+                raise ValidationError("profile invocation argv differs from its authorized prompt and tool contract")
         if self.provider_tools is not None:
             if self.provider is not Provider.CLAUDE:
                 raise ValidationError("exact provider-tool selection is unsupported for this provider")
@@ -295,7 +346,7 @@ class TaskPacket:
                 raise ValidationError("invocation does not enforce the packet provider-tool list")
 
     def to_dict(self) -> dict[str, object]:
-        return {
+        result = {
             "schema_version": self.schema_version,
             "task_id": self.task_id,
             "attempt_id": self.attempt_id,
@@ -320,6 +371,48 @@ class TaskPacket:
             "task_revision": self.task_revision,
             "provider_tools": list(self.provider_tools) if self.provider_tools is not None else None,
         }
+        if self.schema_version == 2:
+            result.update(task_tags=list(self.task_tags), profile_id=self.profile_id, profile_version=self.profile_version,
+                          profile_digest=self.profile_digest, selection_digest=self.selection_digest,
+                          effective_prompt_digest=self.effective_prompt_digest, profile_binding_json=self.profile_binding_json)
+        return result
+
+    @classmethod
+    def from_dict(cls, value: object) -> "TaskPacket":
+        from dataclasses import fields
+        from .validation import exact_keys
+        if type(value) is not dict or type(value.get("schema_version")) is not int or value["schema_version"] not in (1, 2):
+            raise ValidationError("unsupported packet schema")
+        profile_fields = {"task_tags", "profile_id", "profile_version", "profile_digest", "selection_digest",
+                          "effective_prompt_digest", "profile_binding_json"}
+        keys = {field.name for field in fields(cls)} - (profile_fields if value["schema_version"] == 1 else set())
+        data = dict(exact_keys(value, keys, "TaskPacket"))
+        try:
+            data.update(role=Role(data["role"]), provider=Provider(data["provider"]))
+            for name in ("owned_paths", "allowed_tools", "required_tests", "acceptance_conditions", "skills", "context_artifacts"):
+                if type(data[name]) is not list:
+                    raise ValidationError("packet tuple fields must be arrays")
+            def decode_skill(item):
+                entry = dict(exact_keys(item, {field.name for field in fields(SkillRecord)}, "SkillRecord"))
+                for name in ("applicable_roles", "dependencies", "required_capabilities"):
+                    if type(entry[name]) is not list:
+                        raise ValidationError("skill tuple fields must be arrays")
+                    entry[name] = tuple(Role(role) for role in entry[name]) if name == "applicable_roles" else tuple(entry[name])
+                return SkillRecord(**entry)
+            data["skills"] = tuple(decode_skill(item) for item in data["skills"])
+            data["context_artifacts"] = tuple(ArtifactRef(**item) for item in data["context_artifacts"])
+            contract = dict(exact_keys(data["output_contract"], {"format", "required_fields", "max_bytes"}, "OutputContract"))
+            if type(contract["required_fields"]) is not list:
+                raise ValidationError("output fields must be an array")
+            data["output_contract"] = OutputContract(contract["format"], tuple(contract["required_fields"]), contract["max_bytes"])
+            for name in ("owned_paths", "allowed_tools", "required_tests", "acceptance_conditions", "provider_tools", "task_tags"):
+                if name in data and data[name] is not None:
+                    if type(data[name]) is not list:
+                        raise ValidationError("packet tuple fields must be arrays")
+                    data[name] = tuple(data[name])
+            return cls(**data)
+        except (ValueError, TypeError, KeyError) as exc:
+            raise ValidationError("invalid serialized task packet") from exc
 
     def canonical_json(self) -> str:
         return canonical_json(self.to_dict())

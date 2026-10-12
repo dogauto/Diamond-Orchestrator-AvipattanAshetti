@@ -10,9 +10,17 @@ build passes. Self-improvement verification, independent delivery review,
 publication, cancellation, and recovery are distinct operations. Schema 8
 adds durable publication/disposition records and bounded evidence indexes;
 existing ledgers require explicit migration. Daily analysis retains scope,
-lineage, citations, and uncertainty. The M2 profile pilot and later adaptive
+lineage, citations, and uncertainty. The M2 live profile pilot and later adaptive
 routing remain planned. This checkpoint supersedes older test counts below;
 the historical live-provider and production-readiness limitations still apply.
+
+The [M2 profile trial infrastructure](../verification/COUNCIL_M2.md) adds
+digest-pinned profile selection, versioned packet identity, read-only workflow
+preview, structural trial-design validation, schema-9 immutable registrations,
+assignments, reservations, cancellation fences, and accounting-only outcome
+records. Current full-suite verification: **355 tests pass, 97 Python files
+compile in memory**. Live profile dispatch remains blocked pending approved
+operator inputs and controller-derived provider-result accounting.
 
 | Item | State |
 | --- | --- |

@@ -6,7 +6,7 @@ from uuid import uuid4
 from .adapters import Invocation
 from .evidence import (AttemptStatus, EvidenceRecord, ExecutionAttempt, digest_text,
                        environment_secrets, output_evidence, safe_excerpt)
-from .errors import ConflictError, ValidationError
+from .errors import ConflictError, ExecutionGuardError, ValidationError
 from .packets import ArtifactRef, PacketContext, TaskPacket
 from .processes import ProcessIdentity
 from .results import NormalizedResult, ParseStatus, parse_result
@@ -23,13 +23,15 @@ async def run_persisted(store: EventStore, packet: TaskPacket, attempt: Executio
                         timeout_seconds: float = 900,
                         output_limit: int = 1_048_576,
                         environment: dict[str, str] | None = None,
-                        output_artifacts: tuple[ArtifactRef, ...] = (), max_workers: int = 2) -> tuple[ExecutionAttempt, NormalizedResult,
+                         output_artifacts: tuple[ArtifactRef, ...] = (), max_workers: int = 2) -> tuple[ExecutionAttempt, NormalizedResult,
                                                                                   ExecutionResult, EvidenceRecord]:
     """Run one explicit invocation with launch intent and completion evidence in the ledger."""
     if not isinstance(store, EventStore) or not isinstance(packet, TaskPacket) or not isinstance(attempt, ExecutionAttempt):
         raise ValidationError("run_persisted requires a store, packet, and validated attempt")
     if not isinstance(invocation, Invocation):
         raise ValidationError("run_persisted requires a validated invocation")
+    if packet.schema_version == 2:
+        raise ExecutionGuardError("profile pilot is preview-only until persisted trial assignment and aggregate budgets are implemented")
     if not isinstance(cwd, Path):
         raise ValidationError("run_persisted cwd must be a pathlib.Path")
     if not isinstance(registry, SkillRegistry) or type(available_capabilities) is not tuple:

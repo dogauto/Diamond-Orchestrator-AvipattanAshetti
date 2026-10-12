@@ -1,12 +1,13 @@
 # Dynamic agents and provider routing: Council-advised plan
 
 Date: 2026-10-12. Source baseline: `65dc97f`.
-Status: **M0/M1 first implementation slice verified; M2–M6 remain planned.**
+Status: **M0/M1 verified; M2 profile foundation and dry-run accounting verified; live M2 and M3–M6 remain planned.**
 Decision: [Council verdict](../decisions/dynamic-agents-2026-10-12/VERDICT.md).
 Evidence and uncertainty: [brief](../decisions/dynamic-agents-2026-10-12/BRIEF.md).
 Protocol, execution limitations and votes: [tally](../decisions/dynamic-agents-2026-10-12/TALLY.md).
 
 Implementation follow-up: [M0/M1 implementation and verification](../verification/COUNCIL_M0_M1.md).
+M2 follow-up: [offline profiles and pilot prerequisites](../verification/COUNCIL_M2.md).
 The baseline findings and Council transcript below retain their original scope;
 the follow-up identifies the repairs, commands, migration, and current checks.
 
@@ -208,7 +209,7 @@ Reuse existing canonical JSON and validation style. Do not add four competing co
 ## 6. Compatibility and data migration
 
 - Configuration schema 1 currently rejects extras. Choose an explicit schema-2 opt-in with a versioned loader/migration command; preserve exact schema-1 fixed-route interpretation. Do not silently reinterpret the current TOML or override Antigravity planner/researcher assignments with routing defaults.
-- SQLite is schema 7 at this baseline. Allocate the next migration after checking current HEAD again; do not assume a fixed future number. Reconcile health projection triggers, add required indexes and new immutable records transactionally. Test schema 7 and all existing supported upgrade chains on fixture copies, backup/replay equality and injected migration failure. No live ledger migration occurs during this planning task.
+- SQLite was schema 8 at the start of the M2 slice and is now schema 9. The explicit 8-to-9 migration adds immutable trial registrations, cancellation events, assignments, reservations and outcome records. Existing schema-8 ledgers require the explicit migration command; no live ledger is migrated automatically. Health projection repair remains an M3 target.
 - Stored workflow/delivery/packet JSON uses exact field checks. Support old versions via explicit decoders; additive fields are not automatically backward compatible. Preserve legacy canonical bytes/digests for active and historical attempts; prohibit rewriting accepted snapshots.
 - API/CLI envelopes stay schema-versioned; shell, MCP, dashboard and macOS use the same controller. New statuses/commands must have unknown-version behavior. UI receives explanations and IDs, never duplicate authorization logic.
 - State for improvements must be durable and project-keyed outside editable shadows. Provide explicit discovery/import for old temporary checkpoints; never copy mixed global temporary state into a project's learning set without provenance.
@@ -262,7 +263,10 @@ No analysis can guarantee all unknown unknowns are covered. This matrix makes th
 
 ## 9. Proposed operator experience
 
-Current implemented command: `daily-improve analyze`.
+Current implemented commands include `daily-improve analyze` and the M2
+profile preview/trial-template/trial-validate/trial-register/trial-assign/
+trial-show/trial-cancel/trial-outcome accounting surfaces. They remain
+provider-launch-free until live authorization is separately completed.
 
 Existing `workflow show`, `workflow status`, `workflow events`, `delivery show`, and `delivery status` commands remain available. Proposed later surfaces (not runnable commands yet): candidate show/disposition; profile preview; route explain; parent improvement plan/baseline/run-one-step; parent publish/reconcile; outcome report. Extend existing delivery inspection with linked improvement/profile/route IDs. Each surface returns stable IDs, revisions, selected/rejected routes and reasons, evidence links, budget/unknown fields, and actual execution status. Read-only preview/inspection never triggers a model call or initializes health state.
 

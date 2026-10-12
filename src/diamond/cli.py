@@ -75,6 +75,8 @@ def parser() -> argparse.ArgumentParser:
     workflow_create.add_argument("--owned-path", action="append", required=True)
     workflow_create.add_argument("--test", action="append", required=True, help="trusted TestCommand JSON: name, argv, timeout_seconds, output_limit")
     workflow_create.add_argument("--correction-limit", type=int)
+    workflow_create.add_argument("--task-tag", action="append", default=[], help="versioned profile-pilot tag; requires --trial-opt-in")
+    workflow_create.add_argument("--trial-opt-in", help="explicit registered profile trial ID; keeps execution gated until assignment dispatch exists")
     workflow_create.add_argument("--workflow-id")
     workflow_create.add_argument("--command-id", required=True)
     workflow_list = workflow_commands.add_parser("list")
@@ -188,6 +190,45 @@ def parser() -> argparse.ArgumentParser:
     daily_disposition.add_argument("--evidence-id", action="append", required=True)
     daily_disposition.add_argument("--command-id", required=True)
     daily_disposition.add_argument("--cooldown-hours", type=int, default=24)
+    profiles = commands.add_parser("profile", help="preview reviewed bounded instruction profiles")
+    profile_commands = profiles.add_subparsers(dest="profile_command", required=True)
+    profile_preview = profile_commands.add_parser("preview", help="compile a profile selection without launching a provider")
+    profile_preview.add_argument("--objective")
+    profile_preview.add_argument("--role", choices=[role.value for role in Role], default="builder")
+    profile_preview.add_argument("--provider", choices=[provider.value for provider in Provider])
+    profile_preview.add_argument("--workspace")
+    profile_preview.add_argument("--workflow-id")
+    profile_preview.add_argument("--tag", action="append", default=[])
+    profile_preview.add_argument("--task-id")
+    profile_trial = profile_commands.add_parser("trial-validate", help="validate the preregistration gate for a live M2 trial")
+    profile_trial.add_argument("--file", required=True)
+    profile_template = profile_commands.add_parser("trial-template", help="show the incomplete operator-owned trial design fields")
+    profile_register = profile_commands.add_parser("trial-register", help="persist a validated trial design without authorizing execution")
+    profile_register.add_argument("--file", required=True)
+    profile_register.add_argument("--command-id", required=True)
+    profile_list = profile_commands.add_parser("trial-list", help="list persisted profile trial registrations")
+    profile_show = profile_commands.add_parser("trial-show", help="show persisted trial accounting")
+    profile_show.add_argument("trial_id")
+    profile_cancel = profile_commands.add_parser("trial-cancel", help="cancel future assignments for a registered trial")
+    profile_cancel.add_argument("trial_id")
+    profile_cancel.add_argument("--reason", required=True)
+    profile_cancel.add_argument("--command-id", required=True)
+    profile_assign = profile_commands.add_parser("trial-assign", help="persist a dry-run arm assignment; never launches a provider")
+    profile_assign.add_argument("trial_id")
+    profile_assign.add_argument("--workflow-id", required=True)
+    profile_assign.add_argument("--lineage-key", required=True)
+    profile_assign.add_argument("--arm", required=True, help="control or one of the registered profile IDs")
+    profile_assign.add_argument("--reserved-provider-calls", type=int, required=True)
+    profile_assign.add_argument("--reserved-wall-clock-seconds", type=int, required=True)
+    profile_assign.add_argument("--command-id", required=True)
+    profile_outcome = profile_commands.add_parser("trial-outcome", help="record an accounting-only trial outcome; never launches a provider")
+    profile_outcome.add_argument("assignment_id")
+    profile_outcome.add_argument("--status", choices=("SUCCEEDED", "FAILED", "UNKNOWN", "CANCELLED"), required=True)
+    profile_outcome.add_argument("--provider-calls", type=int, required=True)
+    profile_outcome.add_argument("--wall-clock-seconds", type=int, required=True)
+    profile_outcome.add_argument("--cost-microunits", type=int, default=0)
+    profile_outcome.add_argument("--unknown-reason")
+    profile_outcome.add_argument("--command-id", required=True)
     for command in (validate, diagnostic, smoke, backup, create, listing, show, events, attempts, evidence, claims, reconcile,
                      workflow_create, workflow_list, workflow_show, workflow_status, workflow_events, workflow_step, workflow_reconcile,
                      delivery_create, delivery_list, delivery_step, delivery_reconcile, delivery_status, *delivery_reads,
@@ -195,6 +236,9 @@ def parser() -> argparse.ArgumentParser:
                      improvement_rollback, improvement_review, improvement_publish, improvement_reconcile, improvement_cancel,
                      autonomy_plan, autonomy_run, autonomy_commands.choices["stop"],
                      autonomy_commands.choices["clear-stop"], daily_analyze, daily_disposition):
+        command.add_argument("--json", action="store_true", default=argparse.SUPPRESS)
+    for command in (profile_preview, profile_trial, profile_template, profile_register, profile_list, profile_show,
+                    profile_cancel, profile_assign, profile_outcome):
         command.add_argument("--json", action="store_true", default=argparse.SUPPRESS)
     return root
 
@@ -260,6 +304,10 @@ def _run(args: argparse.Namespace) -> tuple[dict[str, Any], int]:
         from .improvement_evidence import record_disposition
         return {"disposition": record_disposition(store, paths.project, args.signature, args.source_digest,
                 args.status, args.reason, tuple(args.evidence_id), args.command_id, args.cooldown_hours)}, 0
+    if args.command == "profile":
+        from .profile_cli import profile_command
+        assert config is not None
+        return profile_command(args, paths, config, store)
     if args.command == "smoke":
         from .live import smoke
         assert config is not None

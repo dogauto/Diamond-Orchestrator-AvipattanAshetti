@@ -135,6 +135,8 @@ def acquire_start(store: "EventStore", claim: DispatchClaim, command_id: str) ->
         current = store._read_attempt(connection, claim.attempt_id)
         from .occupancy import protect_delivery_roots, protect_owned_paths
         packet = parse_canonical_json(row["packet_json"])
+        if packet.get("schema_version") == 2:
+            raise ExecutionGuardError("profile pilot packets cannot acquire launch authority before trial accounting is implemented")
         protect_delivery_roots(connection, tuple(Path(packet["workspace_root"]) / value for value in packet["owned_paths"]))
         protect_owned_paths(connection, tuple(Path(packet["workspace_root"]) / value for value in packet["owned_paths"]),
                             claim.task_id, claim.attempt_id)

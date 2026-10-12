@@ -43,6 +43,8 @@ PROTECTED_PATHS = (
     Path("src/diamond/self_improve_cli.py"),
     Path("src/diamond/agent_profiles.py"),
     Path("src/diamond/agent_compiler.py"),
+    Path("src/diamond/profile_cli.py"),
+    Path("src/diamond/trial_design.py"),
 )
 
 

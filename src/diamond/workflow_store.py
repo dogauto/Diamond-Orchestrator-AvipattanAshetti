@@ -129,7 +129,21 @@ class WorkflowStore:
             current = self._read(connection, workflow_id) if event_type != "CREATED" else None
             if current is None and expected_revision != 0 or current is not None and current.revision != expected_revision:
                 raise ConflictError("workflow revision is stale")
+            if event_type == "CREATED":
+                spec_payload = payload.get("spec")
+                if isinstance(spec_payload, dict) and spec_payload.get("trial_opt_in") is not None:
+                    trial_id = spec_payload["trial_opt_in"]
+                    trial = connection.execute("SELECT 1 FROM profile_trials WHERE trial_id=?", (trial_id,)).fetchone()
+                    cancelled = connection.execute(
+                        "SELECT 1 FROM profile_trial_events WHERE trial_id=? AND event_type='CANCELLED'",
+                        (trial_id,)).fetchone()
+                    if trial is None:
+                        raise NotFoundError(f"trial {trial_id} does not exist")
+                    if cancelled is not None:
+                        raise ExecutionGuardError("workflow can only opt into an active registered trial")
             if event_type == "STARTED":
+                if current.spec.trial_opt_in is not None:
+                    raise ExecutionGuardError("trial-opted workflows require a persisted trial assignment dispatch path")
                 from .occupancy import protect_delivery_roots, protect_owned_paths, worker_occupancy
                 protect_delivery_roots(connection, tuple(Path(current.spec.workspace_root) / path for path in current.spec.owned_paths))
                 if worker_occupancy(connection)[0] >= current.spec.max_workers:
