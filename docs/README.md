@@ -140,6 +140,25 @@ evidence and verified source changes. The controller never grants the model
 permission to rewrite its own safety boundary or silently publish a failing
 change.
 
+## Daily improvement analysis
+
+The first daily-improvement slice is a read-only evidence analyzer. It reads
+recent controller evidence, deduplicates the same failure across test and
+verification records, ranks recurring candidates, and returns the exact
+evidence IDs that justify each recommendation:
+
+```sh
+./scripts/diamond.sh --json daily-improve analyze \
+  --window-hours 168 \
+  --max-candidates 5
+```
+
+This command does not launch a provider, change source files, or publish a
+candidate. Its output is the bounded input for the future Researcher/Planner
+stage. A later execution command will be allowed to select owned paths and
+trusted tests only after a candidate has a reproducible baseline and an
+independent delivery review.
+
 ## Foundation launch instructions
 
 The commands below operate the verified foundation slice. They do not launch AI

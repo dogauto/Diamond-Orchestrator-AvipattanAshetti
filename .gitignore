@@ -33,3 +33,23 @@ dino.py
 "#dino.py"
 "import random.py"
 love_to_agi.py
+
+# Python bytecode
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Swift / Xcode build artifacts
+.build/
+*.xcodeproj/
+*.xcworkspace/
+.DS_Store
+
+# Diamond runtime state
+.diamond/
+.swarm/
+.claude-flow/
+.diamond_history
+.bash_history
+.claude.json.rea.backup

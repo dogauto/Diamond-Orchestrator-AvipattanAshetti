@@ -7,7 +7,7 @@ from contextlib import closing
 
 from .errors import StorageError, ValidationError
 
-SCHEMA_VERSION = 6
+SCHEMA_VERSION = 7
 SCHEMA_STATEMENTS = (
     """CREATE TABLE tasks (
         task_id TEXT PRIMARY KEY, revision INTEGER NOT NULL CHECK(revision >= 1),
@@ -136,16 +136,31 @@ SCHEMA_STATEMENTS = (
     """CREATE TRIGGER delivery_commands_no_replace BEFORE INSERT ON delivery_commands WHEN EXISTS (
         SELECT 1 FROM delivery_commands WHERE command_id=NEW.command_id)
         BEGIN SELECT RAISE(ABORT, 'delivery commands cannot be replaced'); END""",
+    """CREATE TABLE provider_health (
+        provider TEXT PRIMARY KEY,
+        last_probe_ts REAL NOT NULL,
+        rate_limit_json TEXT,
+        consecutive_failures INT DEFAULT 0,
+        last_error TEXT,
+        is_quarantined INT DEFAULT 0,
+        quarantine_until REAL,
+        last_successful_dispatch_ts REAL) WITHOUT ROWID""",
+    """CREATE TRIGGER provider_health_no_update BEFORE UPDATE ON provider_health
+        BEGIN SELECT RAISE(ABORT, 'provider_health is managed by controller'); END""",
+    """CREATE TRIGGER provider_health_no_delete BEFORE DELETE ON provider_health
+        BEGIN SELECT RAISE(ABORT, 'provider_health is managed by controller'); END""",
 )
 
 _EVIDENCE_START = 9
 _DISPATCH_START = 18
 _WORKFLOW_START = 22
 _DELIVERY_START = 31
+_MIGRATION_6_TO_7_START = 40
 MIGRATION_2_TO_3 = SCHEMA_STATEMENTS[_EVIDENCE_START:_DISPATCH_START]
 MIGRATION_3_TO_4 = SCHEMA_STATEMENTS[_DISPATCH_START:_WORKFLOW_START]
 MIGRATION_4_TO_5 = SCHEMA_STATEMENTS[_WORKFLOW_START:_DELIVERY_START]
-MIGRATION_5_TO_6 = SCHEMA_STATEMENTS[_DELIVERY_START:]
+MIGRATION_5_TO_6 = SCHEMA_STATEMENTS[_DELIVERY_START:_MIGRATION_6_TO_7_START]
+MIGRATION_6_TO_7 = SCHEMA_STATEMENTS[_MIGRATION_6_TO_7_START:]
 
 
 def _check_layout(connection: sqlite3.Connection, statements: tuple[str, ...]) -> None:
@@ -234,10 +249,16 @@ def migrate_schema(connection: sqlite3.Connection) -> None:
         _check_layout(connection, SCHEMA_STATEMENTS[:_DELIVERY_START])
         for statement in MIGRATION_5_TO_6:
             connection.execute(statement)
+        connection.execute("PRAGMA user_version=6")
+        version = 6
+    if version == 6:
+        _check_layout(connection, SCHEMA_STATEMENTS[:_MIGRATION_6_TO_7_START])
+        for statement in MIGRATION_6_TO_7:
+            connection.execute(statement)
         connection.execute(f"PRAGMA user_version={SCHEMA_VERSION}")
         return
     if version != SCHEMA_VERSION:
-        raise StorageError(f"explicit migration supports schema 2, 3, 4 or 5; found schema {version}")
+        raise StorageError(f"explicit migration supports schema 2, 3, 4, 5 or 6; found schema {version}")
 
 
 def backup_ledger(connection: sqlite3.Connection, destination: Path) -> Path:

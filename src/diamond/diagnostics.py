@@ -16,6 +16,23 @@ from .validation import bounded_int, text
 
 
 @dataclass(frozen=True)
+class RateLimitInfo:
+    """Rate-limit state from a provider probe."""
+    remaining: int | None
+    window_seconds: int | None
+    reset_at: float | None          # monotonic timestamp or None
+    source: str                     # e.g. "claude_usage", "inferred"
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "remaining": self.remaining,
+            "window_seconds": self.window_seconds,
+            "reset_at": self.reset_at,
+            "source": self.source,
+        }
+
+
+@dataclass(frozen=True)
 class ProbeResult:
     provider: Provider
     status: str

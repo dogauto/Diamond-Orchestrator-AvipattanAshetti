@@ -165,12 +165,17 @@ def parser() -> argparse.ArgumentParser:
     autonomy_run.add_argument("--max-failures", type=int, default=1)
     autonomy_commands.add_parser("stop", help="request a running autonomy loop to stop")
     autonomy_commands.add_parser("clear-stop", help="clear the durable autonomy stop request")
+    daily = commands.add_parser("daily-improve", help="analyze recent evidence for bounded improvement candidates")
+    daily_commands = daily.add_subparsers(dest="daily_command", required=True)
+    daily_analyze = daily_commands.add_parser("analyze", help="rank recurring evidence-backed improvement opportunities")
+    daily_analyze.add_argument("--window-hours", type=int, default=168)
+    daily_analyze.add_argument("--max-candidates", type=int, default=5)
     for command in (validate, diagnostic, smoke, backup, create, listing, show, events, attempts, evidence, claims, reconcile,
                      workflow_create, workflow_list, workflow_show, workflow_status, workflow_events, workflow_step, workflow_reconcile,
                      delivery_create, delivery_list, delivery_step, delivery_reconcile, delivery_status, *delivery_reads,
                      project_commands.choices["status"], improvement_create, improvement_run, improvement_status, improvement_events,
                      improvement_rollback, autonomy_plan, autonomy_run, autonomy_commands.choices["stop"],
-                     autonomy_commands.choices["clear-stop"]):
+                     autonomy_commands.choices["clear-stop"], daily_analyze):
         command.add_argument("--json", action="store_true", default=argparse.SUPPRESS)
     return root
 
@@ -230,6 +235,10 @@ def _run(args: argparse.Namespace) -> tuple[dict[str, Any], int]:
         workspace = Path(args.workspace).expanduser().resolve(strict=True)
         return plan_and_enqueue(args.goal, config, paths.config, paths.project, store, workspace,
                                 tuple(args.owned_path), tuple(args.test), args.command_id), 0
+    if args.command == "daily-improve":
+        from .daily_improve import analyze_ledger
+        if args.daily_command == "analyze":
+            return analyze_ledger(store, args.window_hours, args.max_candidates).to_dict(), 0
     if args.command == "smoke":
         from .live import smoke
         assert config is not None
