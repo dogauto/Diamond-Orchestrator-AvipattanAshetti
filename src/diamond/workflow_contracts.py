@@ -3,11 +3,13 @@ from enum import Enum
 from pathlib import Path
 from typing import Any
 
+from .agent_profiles import normalize_tags
 from .domain import Provider
 from .errors import ValidationError
 from .evidence import digest_text
 from .packets import _digest, _relative_path
-from .validation import bounded_int, canonical_json, exact_keys, parse_canonical_json, task_id, text, utc_timestamp
+from .validation import (bounded_int, canonical_json, command_id, exact_keys, parse_canonical_json,
+                         task_id, text, utc_timestamp)
 
 
 class WorkflowStatus(str, Enum):
@@ -66,6 +68,8 @@ class WorkflowSpec:
     timeout_seconds: int = 180
     max_workers: int = 2
     schema_version: int = 1
+    task_tags: tuple[str, ...] = ()
+    trial_opt_in: str | None = None
 
     def __post_init__(self) -> None:
         task_id(self.workflow_id)
@@ -101,17 +105,39 @@ class WorkflowSpec:
         bounded_int(self.correction_round_limit, "workflow correction limit", 0, 100)
         bounded_int(self.timeout_seconds, "workflow timeout", 1, 900)
         bounded_int(self.max_workers, "workflow max workers", 1, 64)
-        bounded_int(self.schema_version, "workflow schema version", 1, 1)
+        bounded_int(self.schema_version, "workflow schema version", 1, 2)
+        if self.schema_version == 1 and (self.task_tags or self.trial_opt_in is not None):
+            raise ValidationError("workflow trial opt-in requires schema version 2")
+        if self.schema_version == 2:
+            if self.trial_opt_in is None:
+                raise ValidationError("workflow schema version 2 requires an explicit trial opt-in")
+            command_id(self.trial_opt_in)
+            if not self.task_tags:
+                raise ValidationError("trial opt-in requires at least one task tag")
+        if self.task_tags != normalize_tags(self.task_tags):
+            raise ValidationError("workflow task tags must be canonical and distinct")
 
     def to_dict(self) -> dict[str, Any]:
-        result = {field.name: getattr(self, field.name) for field in fields(self)}
+        names = {field.name for field in fields(self)}
+        if self.schema_version == 1:
+            names -= {"task_tags", "trial_opt_in"}
+        result = {name: getattr(self, name) for name in names}
         result.update(owned_paths=list(self.owned_paths), tests=[test.to_dict() for test in self.tests],
                       builder_provider=self.builder_provider.value, debugger_provider=self.debugger_provider.value)
+        if self.schema_version == 2:
+            result.update(task_tags=list(self.task_tags))
         return result
 
     @classmethod
     def from_dict(cls, value: object) -> "WorkflowSpec":
-        data = dict(exact_keys(value, {field.name for field in fields(cls)}, "WorkflowSpec"))
+        legacy = {field.name for field in fields(cls)} - {"task_tags", "trial_opt_in"}
+        versioned = legacy | {"task_tags", "trial_opt_in"}
+        raw = value if isinstance(value, dict) else {}
+        if set(raw) == legacy:
+            data = dict(exact_keys(value, legacy, "WorkflowSpec"))
+            data.update(task_tags=(), trial_opt_in=None)
+        else:
+            data = dict(exact_keys(value, versioned, "WorkflowSpec"))
         try:
             data["builder_provider"] = Provider(data["builder_provider"])
             data["debugger_provider"] = Provider(data["debugger_provider"])
@@ -119,6 +145,13 @@ class WorkflowSpec:
                 raise ValidationError("workflow paths/tests must be arrays")
             data["owned_paths"] = tuple(data["owned_paths"])
             data["tests"] = tuple(TestCommand.from_dict(item) for item in data["tests"])
+            # Backward-compatible: schema-1 data has no task_tags field.
+            task_tags = data.get("task_tags")
+            if task_tags is None:
+                task_tags = ()
+            elif type(task_tags) not in (list, tuple):
+                raise ValidationError("workflow task tags must be an array")
+            data["task_tags"] = tuple(task_tags)
             return cls(**data)
         except (ValueError, TypeError) as exc:
             raise ValidationError("invalid workflow specification") from exc
