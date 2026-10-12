@@ -73,7 +73,7 @@ print(json.dumps({{'result':json.dumps(response),'session_id':session}}))
         self.assertFalse(accepted["certificate"]["production_authorization"])
         backup = report["backup_validation"]
         self.assertEqual(backup["status"], "PASS")
-        self.assertEqual(len(backup["row_counts"]), 19)
+        self.assertEqual(len(backup["row_counts"]), 23)
         self.assertIn("improvement_publications", backup["row_counts"])
         self.assertIn("improvement_dispositions", backup["row_counts"])
         self.assertEqual(backup["row_counts"]["deliveries"], 2)
